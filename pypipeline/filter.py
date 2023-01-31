@@ -1,7 +1,7 @@
 import sys
 
-from pipeline_action import PipelineAction
-from pipeline_item import PipelineItem
+from pypipeline.pipeline_action import PipelineAction
+from pypipeline.pipeline_item import PipelineItem
 
 INT_MAX = sys.maxsize
 SEP = ":"
@@ -49,3 +49,10 @@ class IntFilter(Filter):
 
 class FloatFilter(IntFilter):
     t = float
+
+
+__all__ = [
+    "Filter",
+    "IntFilter",
+    "FloatFilter",
+]

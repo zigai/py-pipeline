@@ -1,4 +1,4 @@
-from pipeline_item import PipelineItem
+from pypipeline.pipeline_item import PipelineItem
 
 
 class PipelineAction:
@@ -28,3 +28,6 @@ class PipelineAction:
 
     def validate_args(self) -> None:
         return
+
+
+__all__ = ["PipelineAction"]

@@ -1,6 +1,6 @@
 import pprint
 
-from pipeline_item import PipelineItem
+from pypipeline.pipeline_item import PipelineItem
 
 
 class ItemsContainer:
@@ -36,3 +36,6 @@ class ItemsContainer:
 
     def print(self):
         pprint.pprint(self.items)
+
+
+__all__ = ["ItemsContainer"]

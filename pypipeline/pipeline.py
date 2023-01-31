@@ -1,10 +1,11 @@
 import multiprocessing
 
-from items_container import ItemsContainer
-from pipeline_action import PipelineAction
-from pipeline_item import PipelineItem
 from stdl.lst import split
 from tqdm import tqdm
+
+from pypipeline.items_container import ItemsContainer
+from pypipeline.pipeline_action import PipelineAction
+from pypipeline.pipeline_item import PipelineItem
 
 
 class Pipeline:
@@ -92,3 +93,6 @@ class PriorityPipeline(Pipeline):
     def add_action(self, action: PipelineAction):
         super().add_action(action)
         self.actions.sort()
+
+
+__all__ = ["Pipeline", "PriorityPipeline"]
