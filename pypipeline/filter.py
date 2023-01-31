@@ -1,4 +1,6 @@
+import re
 import sys
+from fnmatch import fnmatch
 
 from pypipeline.pipeline_action import PipelineAction
 from pypipeline.pipeline_item import PipelineItem
@@ -51,8 +53,36 @@ class FloatFilter(IntFilter):
     t = float
 
 
+class RegexFilter(Filter):
+    def __init__(self, pattern: str | re.Pattern) -> None:
+        self.pattern = pattern
+        if isinstance(self.pattern, str):
+            self.pattern = re.compile(pattern)
+
+    def process(self, text: str) -> bool:
+        return re.search(self.pattern, text) is not None
+
+    @classmethod
+    def parse(cls, val: str):
+        return cls(val)
+
+
+class GlobFilter(Filter):
+    def __init__(self, pattern: str) -> None:
+        self.pattern = pattern
+
+    def process(self, text: str) -> bool:
+        return fnmatch(text, self.pattern)
+
+    @classmethod
+    def parse(cls, val: str):
+        return cls(val)
+
+
 __all__ = [
     "Filter",
     "IntFilter",
     "FloatFilter",
+    "RegexFilter",
+    "GlobFilter",
 ]
