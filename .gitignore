@@ -130,3 +130,4 @@ dmypy.json
 example*.py
 E619*
 models.json
+.idea/
