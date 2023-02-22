@@ -48,7 +48,7 @@ def test_text_pattern_filter():
     assert TextPatternFilter.parse(r"[\w]").pattern_type == "regex"
     assert TextPatternFilter.parse("*.py").inner.pattern == "*.py"
     assert TextPatternFilter.parse(r"[\w]").inner.pattern == re.compile(r"[\w]")
-    assert TextPatternFilter.parse(r"[\w]").inner.inverted == False
-    assert TextPatternFilter.parse(r"[\w]").inverted == False
+    assert TextPatternFilter.parse(r"[\w]").inner.invert == False
+    assert TextPatternFilter.parse(r"[\w]").invert == False
     assert TextPatternFilter.parse(r"[\w]").process("a") == True
     assert TextPatternFilter("py*").process("python") == True
