@@ -30,4 +30,21 @@ class PipelineAction:
         return
 
 
-__all__ = ["PipelineAction"]
+def get_parsable_actions(actions: list[PipelineAction]):
+    """
+    Returns a list of actions that can be parsed by the CLI.
+    This is done by checking if the action has a parse method that returns something other than NotImplemented.
+    """
+    parsable = []
+    for action in actions:
+        try:
+            if action.parse() is not NotImplemented:
+                parsable.append(action)
+        except NotImplementedError:
+            continue
+        except TypeError:
+            parsable.append(action)
+    return parsable
+
+
+__all__ = ["PipelineAction", "get_parsable_actions"]
