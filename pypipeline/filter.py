@@ -2,13 +2,10 @@ import re
 import sys
 from fnmatch import fnmatch
 
+from pypipeline.constants import INT_MAX, INT_MIN, SEP
 from pypipeline.pipeline_action import PipelineAction
 from pypipeline.pipeline_item import PipelineItem
 from pypipeline.util import get_pattern_type
-
-INT_MAX = sys.maxsize
-INT_MIN = -INT_MAX - 1
-SEP = ":"
 
 
 class Filter(PipelineAction):
