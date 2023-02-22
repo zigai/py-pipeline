@@ -12,8 +12,8 @@ SEP = ":"
 
 
 class Filter(PipelineAction):
-    def __init__(self, inverted=False) -> None:
-        self.inverted = inverted
+    def __init__(self, invert=False) -> None:
+        self.invert = invert
         super().__init__()
 
     def process(self, item: PipelineItem) -> bool:
@@ -21,19 +21,19 @@ class Filter(PipelineAction):
 
     def eval(self, item: PipelineItem) -> PipelineItem:
         res = self.process(item)
-        if self.inverted:
+        if self.invert:
             res = not res
-        item.discarded = res
+        item.discarded = not res
         return item
 
 
 class IntFilter(Filter):
     t = int
 
-    def __init__(self, low=INT_MIN, high=INT_MAX, inverted=False) -> None:
+    def __init__(self, low=INT_MIN, high=INT_MAX, invert=False) -> None:
         self.low = low
         self.high = high
-        super().__init__(inverted)
+        super().__init__(invert)
 
     def validate_args(self):
         if self.low > self.high:
@@ -63,11 +63,11 @@ class FloatFilter(IntFilter):
 
 
 class RegexFilter(Filter):
-    def __init__(self, pattern: str | re.Pattern, inverted=False) -> None:
+    def __init__(self, pattern: str | re.Pattern, invert=False) -> None:
         self.pattern = pattern
         if isinstance(self.pattern, str):
             self.pattern = re.compile(pattern)
-        super().__init__(inverted)
+        super().__init__(invert)
 
     def process(self, text: str) -> bool:
         return re.search(self.pattern, text) is not None
@@ -78,11 +78,11 @@ class RegexFilter(Filter):
 
 
 class GlobFilter(Filter):
-    def __init__(self, pattern: str, inverted=False) -> None:
+    def __init__(self, pattern: str, invert=False) -> None:
         if pattern is None:
             raise ValueError
         self.pattern = pattern
-        super().__init__(inverted)
+        super().__init__(invert)
 
     def process(self, text: str) -> bool:
         return fnmatch(text, self.pattern)
@@ -95,17 +95,17 @@ class GlobFilter(Filter):
 class TextPatternFilter(Filter):
     """A filter that can be either a glob or regex pattern."""
 
-    def __init__(self, pattern: str, inverted=False, pattern_type=None) -> None:
+    def __init__(self, pattern: str, invert=False, pattern_type=None) -> None:
         if pattern_type is None:
             pattern_type = get_pattern_type(pattern)
         if pattern_type is None:
             raise ValueError(f"'{pattern}' is not a valid glob or regex pattern.")
         if pattern_type == "regex":
-            self.inner = RegexFilter(pattern, inverted)
+            self.inner = RegexFilter(pattern, invert)
         elif pattern_type == "glob":
-            self.inner = GlobFilter(pattern, inverted)
+            self.inner = GlobFilter(pattern, invert)
         self.pattern_type = pattern_type
-        super().__init__(inverted)
+        super().__init__(invert)
 
     def process(self, text: str) -> bool:
         return self.inner.process(text)
