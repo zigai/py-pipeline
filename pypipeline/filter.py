@@ -6,25 +6,33 @@ from pypipeline.pipeline_action import PipelineAction
 from pypipeline.pipeline_item import PipelineItem
 
 INT_MAX = sys.maxsize
+INT_MIN = -INT_MAX - 1
 SEP = ":"
 
 
 class Filter(PipelineAction):
+    def __init__(self, inverted=False) -> None:
+        self.inverted = inverted
+        super().__init__()
+
     def process(self, item: PipelineItem) -> bool:
-        ...
+        return NotImplemented
 
     def eval(self, item: PipelineItem) -> PipelineItem:
-        item.discarded = self.process(item)
+        res = self.process(item)
+        if self.inverted:
+            res = not res
+        item.discarded = res
         return item
 
 
 class IntFilter(Filter):
     t = int
 
-    def __init__(self, low=0, high=INT_MAX) -> None:
+    def __init__(self, low=INT_MIN, high=INT_MAX, inverted=False) -> None:
         self.low = low
         self.high = high
-        super().__init__()
+        super().__init__(inverted)
 
     def validate_args(self):
         if self.low > self.high:
@@ -54,10 +62,11 @@ class FloatFilter(IntFilter):
 
 
 class RegexFilter(Filter):
-    def __init__(self, pattern: str | re.Pattern) -> None:
+    def __init__(self, pattern: str | re.Pattern, inverted=False) -> None:
         self.pattern = pattern
         if isinstance(self.pattern, str):
             self.pattern = re.compile(pattern)
+        super().__init__(inverted)
 
     def process(self, text: str) -> bool:
         return re.search(self.pattern, text) is not None
@@ -68,8 +77,11 @@ class RegexFilter(Filter):
 
 
 class GlobFilter(Filter):
-    def __init__(self, pattern: str) -> None:
+    def __init__(self, pattern: str, inverted=False) -> None:
+        if pattern is None:
+            raise ValueError
         self.pattern = pattern
+        super().__init__(inverted)
 
     def process(self, text: str) -> bool:
         return fnmatch(text, self.pattern)
