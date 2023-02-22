@@ -9,7 +9,3 @@ def get_pattern_type(pattern: str):
         return "regex"
     else:
         return None
-
-
-print(get_pattern_type("[\w]"))
-print(get_pattern_type("*.py"))

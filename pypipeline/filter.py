@@ -93,6 +93,8 @@ class GlobFilter(Filter):
 
 
 class TextPatternFilter(Filter):
+    """A filter that can be either a glob or regex pattern."""
+
     def __init__(self, pattern: str, inverted=False, pattern_type=None) -> None:
         if pattern_type is None:
             pattern_type = get_pattern_type(pattern)
