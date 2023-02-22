@@ -1,6 +1,16 @@
+import re
+
 import pytest
 
-from pypipeline.filter import INT_MAX, INT_MIN, FloatFilter, GlobFilter, IntFilter, RegexFilter
+from pypipeline.filter import (
+    INT_MAX,
+    INT_MIN,
+    FloatFilter,
+    GlobFilter,
+    IntFilter,
+    RegexFilter,
+    TextPatternFilter,
+)
 
 
 def test_int_filter():
@@ -31,3 +41,14 @@ def test_float_filter():
         FloatFilter.parse("2.5:1.5")
     with pytest.raises(ValueError):
         FloatFilter.parse("1.5:2.5:3.5")
+
+
+def test_text_pattern_filter():
+    assert TextPatternFilter.parse("*.py").pattern_type == "glob"
+    assert TextPatternFilter.parse(r"[\w]").pattern_type == "regex"
+    assert TextPatternFilter.parse("*.py").inner.pattern == "*.py"
+    assert TextPatternFilter.parse(r"[\w]").inner.pattern == re.compile(r"[\w]")
+    assert TextPatternFilter.parse(r"[\w]").inner.inverted == False
+    assert TextPatternFilter.parse(r"[\w]").inverted == False
+    assert TextPatternFilter.parse(r"[\w]").process("a") == True
+    assert TextPatternFilter("py*").process("python") == True

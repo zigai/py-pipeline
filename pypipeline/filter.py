@@ -4,6 +4,7 @@ from fnmatch import fnmatch
 
 from pypipeline.pipeline_action import PipelineAction
 from pypipeline.pipeline_item import PipelineItem
+from pypipeline.util import get_pattern_type
 
 INT_MAX = sys.maxsize
 INT_MIN = -INT_MAX - 1
@@ -85,6 +86,27 @@ class GlobFilter(Filter):
 
     def process(self, text: str) -> bool:
         return fnmatch(text, self.pattern)
+
+    @classmethod
+    def parse(cls, val: str):
+        return cls(val)
+
+
+class TextPatternFilter(Filter):
+    def __init__(self, pattern: str, inverted=False, pattern_type=None) -> None:
+        if pattern_type is None:
+            pattern_type = get_pattern_type(pattern)
+        if pattern_type is None:
+            raise ValueError(f"'{pattern}' is not a valid glob or regex pattern.")
+        if pattern_type == "regex":
+            self.inner = RegexFilter(pattern, inverted)
+        elif pattern_type == "glob":
+            self.inner = GlobFilter(pattern, inverted)
+        self.pattern_type = pattern_type
+        super().__init__(inverted)
+
+    def process(self, text: str) -> bool:
+        return self.inner.process(text)
 
     @classmethod
     def parse(cls, val: str):
