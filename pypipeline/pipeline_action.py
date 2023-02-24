@@ -3,6 +3,7 @@ from pypipeline.pipeline_item import PipelineItem
 
 class PipelineAction:
     priority: int = 1
+    abbrev: str | None = None
 
     def __init__(self) -> None:
         self.validate_args()
