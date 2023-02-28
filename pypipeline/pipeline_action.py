@@ -31,7 +31,7 @@ class PipelineAction:
         return
 
 
-def get_parsable_actions(actions: list[PipelineAction]):
+def get_parsable_actions(actions: list[PipelineAction]) -> list[PipelineAction]:
     """
     Returns a list of actions that can be parsed by the CLI.
     This is done by checking if the action has a parse method that returns something other than NotImplemented.
