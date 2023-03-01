@@ -5,7 +5,7 @@ from pypipeline.pipeline_item import PipelineItem
 
 class Transformer(PipelineAction):
     def process(self, item: PipelineItem) -> PipelineItem:
-        ...
+        return NotImplemented
 
 
 __all__ = ["Transformer"]

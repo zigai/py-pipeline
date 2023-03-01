@@ -1,7 +1,6 @@
 import inspect
 import sys
 from multiprocessing import cpu_count
-from pprint import pp, pprint
 
 import docstring_parser
 from interfacy_cli.cli import get_command_abbrev
@@ -9,7 +8,7 @@ from stdl.str_u import colored, kebab_case, snake_case
 
 from pypipeline.filter import Filter
 from pypipeline.pipeline import Pipeline
-from pypipeline.pipeline_action import PipelineAction, get_parsable_actions
+from pypipeline.pipeline_action import PipelineAction
 from pypipeline.pipeline_item import PipelineItem
 
 

@@ -10,7 +10,7 @@ class PipelineItem:
         return f"{self.__class__.__name__}(discarded={self.discarded})"
 
     def on_discard(self) -> None:
-        ...
+        return
 
 
 __all__ = ["PipelineItem"]
