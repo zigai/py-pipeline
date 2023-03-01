@@ -9,11 +9,12 @@ from pypipeline.pipeline_item import PipelineItem
 
 
 class Pipeline:
-    def __init__(self, actions: list[PipelineAction] | None = None) -> None:
+    def __init__(self, actions: list[PipelineAction] | None = None, on_discrad=True) -> None:
         self.actions: list[PipelineAction] = []
         if actions:
             self.actions.extend(actions)
         self.lock = multiprocessing.Manager().Lock()
+        self.on_discard = on_discrad
 
     def add_action(self, action: PipelineAction):
         self.actions.append(action)
@@ -24,6 +25,8 @@ class Pipeline:
         for action in self.actions:
             item = action.eval(item)
             if item.discarded:
+                if self.on_discard:
+                    item.on_discard()
                 return item
         return item
 

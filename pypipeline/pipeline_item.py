@@ -9,5 +9,8 @@ class PipelineItem:
     def __repr__(self):
         return f"{self.__class__.__name__}(discarded={self.discarded})"
 
+    def on_discard(self) -> None:
+        ...
+
 
 __all__ = ["PipelineItem"]
