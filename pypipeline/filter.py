@@ -1,5 +1,4 @@
 import re
-import sys
 from fnmatch import fnmatch
 
 from pypipeline.constants import INT_MAX, INT_MIN, SEP
@@ -42,6 +41,8 @@ class IntFilter(Filter):
             return cls()
         args = val.split(SEP)
         args = [i.strip() for i in args]
+        if len(args) != 2:
+            raise ValueError(args)
         match args:
             case ["", ""]:
                 return cls()
