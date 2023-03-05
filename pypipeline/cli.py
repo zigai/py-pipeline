@@ -145,12 +145,14 @@ class PyPipelineCLI:
                     i += 1
                     continue
                 if arg[1:] in self.commands:
-                    arg = arg[1:]
-                    inverted = arg.startswith("!")
+                    cmd = arg[1:]
+                    inverted = cmd.startswith("!")
+                    cmd_args = args[i + 1]
                     if inverted:
-                        action = self.commands[arg](args[i + 1], invert=True)
+                        action = self.commands[cmd].parse(cmd_args, invert=True)
                     else:
-                        action = self.commands[arg](args[i + 1])
+                        action = self.commands[cmd].parse(cmd_args)
+
                     actions.append(action)
                     i += 1
                     continue
