@@ -3,13 +3,49 @@ import sys
 from multiprocessing import cpu_count
 
 import docstring_parser
-from interfacy_cli.cli import get_command_abbrev
 from stdl.str_u import colored, kebab_case, snake_case
 
 from pypipeline.filter import Filter
 from pypipeline.pipeline import Pipeline
 from pypipeline.pipeline_action import PipelineAction
 from pypipeline.pipeline_item import PipelineItem
+
+
+def get_command_abbrev(name: str, taken: list[str]) -> str | None:
+    """
+    Tries to return a short name for a command.
+    Returns None if it cannot find a short name.
+    Example:
+        >>> get_command_short_name("hello_world", [])
+        >>> "h"
+        >>> get_command_short_name("hello_world", ["h"])
+        >>> "hw"
+        >>> get_command_short_name("hello_world", ["hw", "h"])
+        >>> "he"
+        >>> get_command_short_name("hello_world", ["hw", "h", "he"])
+        >>> None
+    """
+    if name in taken:
+        raise ValueError(f"Command name '{name}' already taken")
+    if len(name) < 3:
+        return None
+    name_split = name.split("_")
+    abbrev = name_split[0][0]
+    if abbrev not in taken and abbrev != name:
+        taken.append(abbrev)
+        return abbrev
+    short_name = "".join([i[0] for i in name_split])
+    if short_name not in taken and short_name != name:
+        taken.append(short_name)
+        return short_name
+    try:
+        short_name = name_split[0][:2]
+        if short_name not in taken and short_name != name:
+            taken.append(short_name)
+            return short_name
+        return None
+    except IndexError:
+        return None
 
 
 def get_taken_abbrevs(*actions: PipelineAction):
@@ -49,15 +85,17 @@ class PyPipelineCLI:
     max_ljust = 24
     cmd_prefix = "-"
     pipeline_cls = Pipeline
-    name = "PyPipeline"
 
     def __init__(
         self,
         filters: list | None = None,
-        description=None,
         transformers: list | None = None,
+        name="PyPipeline",
+        description: str = None,  # type: ignore
         print_result=True,
+        run=True,
     ) -> None:
+        self.name = name
         self.filters = filters or []
         self.transformers = transformers or []
         self.taken_abbrevs = get_taken_abbrevs(*self.filters, *self.transformers)
@@ -67,27 +105,29 @@ class PyPipelineCLI:
         self.commands = {}
         self.help = None
         self.t = cpu_count() - 1
-        self._build()
+        self._build_cli()
         self.valid_command_names = list(self.commands.keys())
         self.valid_command_names.extend(RESERVED_ARGS)
+        if run:
+            self.run()
 
     def _build_help_cmd_names(self, actions: list[PipelineAction]):
         command_names = []
-        for f in actions:
-            command_long = kebab_case(f.__name__)  # type: ignore
-            if f.abbrev is None:
+        for action in actions:
+            command_long = kebab_case(action.__name__)  # type: ignore
+            if action.abbrev is None:
                 command_short = command_long
                 command_names.append(f"  {self.cmd_prefix}{command_short}")
-                self.commands[command_short] = f
-                if issubclass(f, Filter):
-                    self.commands["!" + command_short] = f
+                self.commands[command_short] = action
+                if issubclass(action, Filter):
+                    self.commands["!" + command_short] = action
                 continue
-            command_short = f.abbrev
-            self.commands[command_long] = f
-            self.commands[command_short] = f
-            if issubclass(f, Filter):
-                self.commands["!" + command_long] = f
-                self.commands["!" + command_short] = f
+            command_short = action.abbrev
+            self.commands[command_long] = action
+            self.commands[command_short] = action
+            if issubclass(action, Filter):
+                self.commands["!" + command_long] = action
+                self.commands["!" + command_short] = action
             command_names.append(
                 f"  {self.cmd_prefix}{command_short}, {self.cmd_prefix}{command_long}"
             )
@@ -99,7 +139,7 @@ class PyPipelineCLI:
     def log_info(self, message: str):
         print(f"[{self.name}] {message}")
 
-    def _build(self):
+    def _build_cli(self):
         helpstr = []
 
         part1_filters = self._build_help_cmd_names(self.filters)
@@ -113,7 +153,7 @@ class PyPipelineCLI:
         part1_transformers = [i.ljust(ljust) for i in part1_transformers]
 
         helpstr.append("options:")
-        helpstr.append("  -help".ljust(ljust) + "   show this help message and exit")
+        helpstr.append("  -help".ljust(ljust) + "   show this help message and sys.exit")
         helpstr.append("  -t".ljust(ljust) + "   number of threads to use (default: cpu_count - 1)")
 
         helpstr.append("\nfilters:")
@@ -130,7 +170,8 @@ class PyPipelineCLI:
         args = sys.argv[1:]
         if not args:
             print(self.help)
-            exit(1)
+            sys.exit(1)
+
         items = []
         actions = []
         i = 0
@@ -139,7 +180,7 @@ class PyPipelineCLI:
             if len(arg) > 1 and arg[1:] in self.valid_command_names:
                 if arg == "-help":
                     print(self.help)
-                    exit(1)
+                    sys.exit(1)
                 if arg == "-t":
                     self.t = int(args[i + 1])
                     i += 1
@@ -158,13 +199,13 @@ class PyPipelineCLI:
                     continue
                 else:
                     self.log_error(f"unknown command: {arg}")
-                    exit(1)
+                    sys.exit(1)
             else:
                 if not arg.startswith("-"):
                     items.append(arg)
                 else:
                     self.log_error(f"unknown argument: {arg}")
-                    exit(1)
+                    sys.exit(1)
             i += 1
         return items, actions
 
@@ -174,15 +215,22 @@ class PyPipelineCLI:
     def run(self):
         items, actions = self.parse_args()
         if items is None or actions is None:
-            return
+            self.log_info("no actions provided")
+            sys.exit(0)
+
         items = self.collect_items(items)
         if not items:
             self.log_info("no items to process")
-            exit(0)
+            sys.exit(0)
+
         pipeline = self.pipeline_cls(actions=actions)
-        res = pipeline.process_multi(items, t=self.t)
+        if self.t != 1:
+            res = pipeline.process_multi(items, t=self.t)
+        else:
+            res = pipeline.process(items)
+
         if self.print_result:
-            for item in res:
+            for item in res.kept:
                 print(item)
 
 

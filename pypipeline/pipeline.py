@@ -30,7 +30,7 @@ class Pipeline:
                 return item
         return item
 
-    def process_items(self, items: list, _pos: int = 0):
+    def process(self, items: list, _pos: int = 0):
         """
         Process a list of items through the pipeline.
 
@@ -69,7 +69,7 @@ class Pipeline:
         for pos, chunk in enumerate(list_chunks):
             rvals.append(
                 pool.apply_async(
-                    self.process_items,
+                    self.process,
                     args=(chunk, pos),
                 )
             )

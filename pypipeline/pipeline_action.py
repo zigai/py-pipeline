@@ -18,10 +18,10 @@ class PipelineAction:
         return NotImplemented
 
     def process(self, item: PipelineItem) -> PipelineItem | bool:
-        ...
+        return NotImplemented
 
     def eval(self, item: PipelineItem) -> PipelineItem:
-        ...
+        return NotImplemented
 
     @classmethod
     def parse(cls, val: str | None = None):

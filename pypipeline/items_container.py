@@ -5,9 +5,7 @@ from pypipeline.pipeline_item import PipelineItem
 
 class ItemsContainer:
     def __init__(self, items: list[PipelineItem] | None = None) -> None:
-        self.items: list[PipelineItem] = []
-        if items:
-            self.items.extend(items)
+        self.items: list[PipelineItem] = items or []
 
     def add(self, item: PipelineItem):
         self.items.append(item)
