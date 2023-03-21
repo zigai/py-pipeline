@@ -87,17 +87,16 @@ class PyPipelineCLI:
     flag_prefix = "-"
     pipeline_cls = Pipeline
     base_description = "Filters can be inverted by adding a '!' after the flag .\n"
+    name = "PyPipeline"
 
     def __init__(
         self,
         filters: list | None = None,
         transformers: list | None = None,
-        name="PyPipeline",
         description: str = None,  # type: ignore
         print_res=True,
         run=True,
     ) -> None:
-        self.name = name
         self.filters = filters or []
         self.transformers = transformers or []
         self.taken_abbrevs = get_taken_abbrevs(*self.filters, *self.transformers)
