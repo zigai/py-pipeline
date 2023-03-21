@@ -9,12 +9,17 @@ from pypipeline.pipeline_item import PipelineItem
 
 
 class Pipeline:
-    def __init__(self, actions: list[PipelineAction] | None = None, on_discrad=True) -> None:
+    def __init__(
+        self, actions: list[PipelineAction] | None = None, on_discrad=True, verbose=False
+    ) -> None:
         self.actions: list[PipelineAction] = []
         if actions:
             self.actions.extend(actions)
         self.lock = multiprocessing.Manager().Lock()
         self.on_discard = on_discrad
+        self.verbose = verbose
+        if not self.verbose:
+            self.process = self.process_no_bar
 
     def add_action(self, action: PipelineAction):
         self.actions.append(action)
@@ -50,6 +55,12 @@ class Pipeline:
             with self.lock:
                 bar.update(1)
         return ItemsContainer(results)
+
+    def process_no_bar(self, items: list, _pos: int = 0):
+        """
+        Same as process, but without a progress bar.
+        """
+        return ItemsContainer([self.process_item(item) for item in items])
 
     def process_multi(self, items: list[PipelineItem], t: int):
         """
