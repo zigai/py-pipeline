@@ -84,7 +84,7 @@ RESERVED_ARGS = ["help", "t"]
 class PyPipelineCLI:
     min_ljust = 8
     max_ljust = 24
-    cmd_prefix = "-"
+    flag_prefix = "-"
     pipeline_cls = Pipeline
     base_description = "Filters can be inverted by adding a '!' after the flag .\n"
 
@@ -116,23 +116,21 @@ class PyPipelineCLI:
     def _build_help_cmd_names(self, actions: list[PipelineAction]) -> list[str]:
         command_names = []
         for action in actions:
-            command_long = kebab_case(action.__name__)  # type: ignore
+            flag_long = kebab_case(action.__name__)  # type: ignore
             if action.abbrev is None:
-                command_short = command_long
-                command_names.append(f"  {self.cmd_prefix}{command_short}")
-                self.commands[command_short] = action
+                flag_short = flag_long
+                command_names.append(f"  {self.flag_prefix}{flag_short}")
+                self.commands[flag_short] = action
                 if issubclass(action, Filter):
-                    self.commands[command_short + "!"] = action
+                    self.commands[flag_short + "!"] = action
                 continue
-            command_short = action.abbrev
-            self.commands[command_long] = action
-            self.commands[command_short] = action
+            flag_short = action.abbrev
+            self.commands[flag_long] = action
+            self.commands[flag_short] = action
             if issubclass(action, Filter):
-                self.commands[command_long + "!"] = action
-                self.commands[command_short + "!"] = action
-            command_names.append(
-                f"  {self.cmd_prefix}{command_short}, {self.cmd_prefix}{command_long}"
-            )
+                self.commands[flag_long + "!"] = action
+                self.commands[flag_short + "!"] = action
+            command_names.append(f"  {self.flag_prefix}{flag_short}, {self.flag_prefix}{flag_long}")
         return command_names
 
     def log_error(self, message: str):
@@ -161,12 +159,12 @@ class PyPipelineCLI:
         )
 
         flags_help.append("\nfilters:")
-        for f, cmd_help in zip(self.filters, part1_filters):
-            flags_help.append(f"{cmd_help}   {get_description(f)}")
+        for f, flag_help in zip(self.filters, part1_filters):
+            flags_help.append(f"{flag_help}   {get_description(f)}")
 
         flags_help.append("\ntransformers:")
-        for t, cmd_help in zip(self.transformers, part1_transformers):
-            flags_help.append(f"{cmd_help}   {get_description(t)}")
+        for t, flag_help in zip(self.transformers, part1_transformers):
+            flags_help.append(f"{flag_help}   {get_description(t)}")
 
         self.help = self.get_help_str(flags_help)
 
