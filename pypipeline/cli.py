@@ -11,6 +11,15 @@ from pypipeline.pipeline import Pipeline
 from pypipeline.pipeline_action import PipelineAction
 from pypipeline.pipeline_item import PipelineItem
 
+RESERVED_ARGS = ["help", "t", "v", "verbose"]
+
+
+class ExitCodes:
+    SUCCESS = 0
+    INPUT_ERROR = 1
+    PARSING_ERROR = 2
+    PROCESSING_ERROR = 3
+
 
 def get_command_abbrev(name: str, taken: list[str]) -> str | None:
     """
@@ -49,7 +58,7 @@ def get_command_abbrev(name: str, taken: list[str]) -> str | None:
         return None
 
 
-def get_taken_abbrevs(*actions: PipelineAction):
+def get_taken_abbrevs(*actions: PipelineAction) -> list[str]:
     taken = []
     for i in actions:
         if i.abbrev is None:
@@ -66,7 +75,7 @@ def fill_missing_abbrevs(*actions: PipelineAction, taken: list[str]):
             i.abbrev = get_command_abbrev(snake_case(i.__class__.__name__), taken=taken)
 
 
-def get_description(action: PipelineAction):
+def get_action_description(action: PipelineAction):
     doc = inspect.getdoc(action)
     if doc is None:
         return ""
@@ -76,16 +85,6 @@ def get_description(action: PipelineAction):
     if doc.long_description:
         return doc.long_description
     return ""
-
-
-RESERVED_ARGS = ["help", "t", "v", "verbose"]
-
-
-class ExitCodes:
-    SUCCESS = 0
-    INPUT_ERROR = 1
-    PARSING_ERROR = 2
-    PROCESSING_ERROR = 3
 
 
 class PyPipelineCLI:
@@ -106,18 +105,21 @@ class PyPipelineCLI:
     ) -> None:
         self.filters = filters or []
         self.transformers = transformers or []
-        self.err_label = colored(f"[{self.name}]", "red")
-        self.taken_abbrevs = get_taken_abbrevs(*self.filters, *self.transformers)
-        fill_missing_abbrevs(*self.filters, *self.transformers, taken=self.taken_abbrevs)
         self.description = description or ""
         self.print_res = print_res
+        self.err_label = colored(f"[{self.name}]", "red")
         self.commands = {}
         self.help = None
         self.t = cpu_count() - 1
+        self.verbose = False
+
+        self.taken_abbrevs = get_taken_abbrevs(*self.filters, *self.transformers)
+        fill_missing_abbrevs(*self.filters, *self.transformers, taken=self.taken_abbrevs)
+
         self._build_cli()
         self.valid_command_names = list(self.commands.keys())
         self.valid_command_names.extend(RESERVED_ARGS)
-        self.verbose = False
+
         if run:
             self.run()
 
@@ -132,13 +134,16 @@ class PyPipelineCLI:
                 if issubclass(action, Filter):
                     self.commands[flag_short + "!"] = action
                 continue
+
             flag_short = action.abbrev
             self.commands[flag_long] = action
             self.commands[flag_short] = action
+
             if issubclass(action, Filter):
                 self.commands[flag_long + "!"] = action
                 self.commands[flag_short + "!"] = action
             command_names.append(f"  {self.flag_prefix}{flag_short}, {self.flag_prefix}{flag_long}")
+
         return command_names
 
     def log_error(self, message: str):
@@ -173,11 +178,11 @@ class PyPipelineCLI:
 
         flags_help.append("\nfilters:")
         for f, flag_help in zip(self.filters, part1_filters):
-            flags_help.append(f"{flag_help}   {get_description(f)}")
+            flags_help.append(f"{flag_help}   {get_action_description(f)}")
 
         flags_help.append("\ntransformers:")
         for t, flag_help in zip(self.transformers, part1_transformers):
-            flags_help.append(f"{flag_help}   {get_description(t)}")
+            flags_help.append(f"{flag_help}   {get_action_description(t)}")
 
         self.help = self.get_help_str(flags_help)
 
@@ -190,8 +195,7 @@ class PyPipelineCLI:
             self.log_error("no arguments provided")
             sys.exit(ExitCodes.INPUT_ERROR)
 
-        items = []
-        actions = []
+        items, actions = [], []
         i = 0
         while i < len(args):
             arg = args[i]
@@ -202,10 +206,8 @@ class PyPipelineCLI:
                 if arg == "-t":
                     self.t = int(args[i + 1])
                     i += 1
-
-                if arg == "-v" or arg == "-verbose":
+                if arg in ["-v", "-verbose"]:
                     self.verbose = True
-
                 if arg[1:] in self.commands:
                     cmd = arg[1:]
                     cmd_args = args[i + 1]
@@ -227,13 +229,6 @@ class PyPipelineCLI:
             i += 1
         return items, actions
 
-    def collect_items(self, items: list[str]) -> list[PipelineItem]:
-        raise NotImplementedError
-
-    def print_result(self, items: ItemsContainer):
-        for item in items.kept:
-            print(item)
-
     def _process_items(self, items: list[PipelineItem], actions: list[PipelineAction]):
         pipeline = self._create_pipeline(actions)
         if self.t != 1:
@@ -249,6 +244,13 @@ class PyPipelineCLI:
 
     def _create_pipeline(self, actions: list[PipelineAction]):
         return self.pipeline_cls(actions=actions, verbose=self.verbose)
+
+    def collect_items(self, items: list[str]) -> list[PipelineItem]:
+        raise NotImplementedError
+
+    def print_result(self, items: ItemsContainer):
+        for item in items.kept:
+            print(item)
 
     def run(self):
         try:
