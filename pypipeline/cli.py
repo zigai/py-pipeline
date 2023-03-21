@@ -192,7 +192,7 @@ class PyPipelineCLI:
     def parse_args(self) -> tuple[list[str], list[PipelineAction]]:
         args = sys.argv[1:]
         if not args:
-            self.log_error("no arguments provided")
+            self.log_error(f"no arguments provided. use -help flag for help")
             sys.exit(ExitCodes.INPUT_ERROR)
 
         items, actions = [], []
@@ -260,7 +260,7 @@ class PyPipelineCLI:
             sys.exit(ExitCodes.PARSING_ERROR)
 
         if items is None or actions is None:
-            self.log_error("no actions provided")
+            self.log_error("no actions provided. use -help flag for help")
             sys.exit(ExitCodes.INPUT_ERROR)
 
         try:
@@ -270,7 +270,7 @@ class PyPipelineCLI:
             sys.exit(ExitCodes.INPUT_ERROR)
 
         if not items:
-            self.log_info("no items to process")
+            self.log_info("no items to process found")
             sys.exit(ExitCodes.INPUT_ERROR)
 
         try:
