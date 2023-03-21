@@ -188,7 +188,7 @@ class PyPipelineCLI:
                 if arg == "-t":
                     self.t = int(args[i + 1])
                     i += 1
-                    continue
+                    # continue
                 if arg[1:] in self.commands:
                     cmd = arg[1:]
                     inverted = cmd.endswith("!")
@@ -200,7 +200,7 @@ class PyPipelineCLI:
 
                     actions.append(action)
                     i += 1
-                    continue
+                    # continue
                 else:
                     self.log_error(f"unknown command: {arg}")
                     sys.exit(1)
@@ -223,6 +223,11 @@ class PyPipelineCLI:
     def _process_items(self, items: list[PipelineItem], actions: list[PipelineAction]):
         pipeline = self._create_pipeline(actions)
         if self.t != 1:
+            if len(items) < self.t:
+                self.log_info(
+                    f"number of items is less than number of threads, using {len(items)} thread(s)"
+                )
+                self.t = len(items)
             res = pipeline.process_multi(items, t=self.t)
         else:
             res = pipeline.process(items)
