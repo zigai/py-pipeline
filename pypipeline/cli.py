@@ -6,6 +6,7 @@ import docstring_parser
 from stdl.str_u import colored, kebab_case, snake_case
 
 from pypipeline.filter import Filter
+from pypipeline.items_container import ItemsContainer
 from pypipeline.pipeline import Pipeline
 from pypipeline.pipeline_action import PipelineAction
 from pypipeline.pipeline_item import PipelineItem
@@ -85,6 +86,7 @@ class PyPipelineCLI:
     max_ljust = 24
     cmd_prefix = "-"
     pipeline_cls = Pipeline
+    base_description = "Filters can be inverted by adding a '!' after the flag .\n"
 
     def __init__(
         self,
@@ -92,7 +94,7 @@ class PyPipelineCLI:
         transformers: list | None = None,
         name="PyPipeline",
         description: str = None,  # type: ignore
-        print_result=True,
+        print_res=True,
         run=True,
     ) -> None:
         self.name = name
@@ -101,7 +103,7 @@ class PyPipelineCLI:
         self.taken_abbrevs = get_taken_abbrevs(*self.filters, *self.transformers)
         fill_missing_abbrevs(*self.filters, *self.transformers, taken=self.taken_abbrevs)
         self.description = description or ""
-        self.print_result = print_result
+        self.print_res = print_res
         self.commands = {}
         self.help = None
         self.t = cpu_count() - 1
@@ -111,7 +113,7 @@ class PyPipelineCLI:
         if run:
             self.run()
 
-    def _build_help_cmd_names(self, actions: list[PipelineAction]):
+    def _build_help_cmd_names(self, actions: list[PipelineAction]) -> list[str]:
         command_names = []
         for action in actions:
             command_long = kebab_case(action.__name__)  # type: ignore
@@ -120,14 +122,14 @@ class PyPipelineCLI:
                 command_names.append(f"  {self.cmd_prefix}{command_short}")
                 self.commands[command_short] = action
                 if issubclass(action, Filter):
-                    self.commands["!" + command_short] = action
+                    self.commands[command_short + "!"] = action
                 continue
             command_short = action.abbrev
             self.commands[command_long] = action
             self.commands[command_short] = action
             if issubclass(action, Filter):
-                self.commands["!" + command_long] = action
-                self.commands["!" + command_short] = action
+                self.commands[command_long + "!"] = action
+                self.commands[command_short + "!"] = action
             command_names.append(
                 f"  {self.cmd_prefix}{command_short}, {self.cmd_prefix}{command_long}"
             )
@@ -140,7 +142,7 @@ class PyPipelineCLI:
         print(f"[{self.name}] {message}")
 
     def _build_cli(self):
-        helpstr = []
+        flags_help = []
 
         part1_filters = self._build_help_cmd_names(self.filters)
         part1_transformers = self._build_help_cmd_names(self.transformers)
@@ -152,19 +154,24 @@ class PyPipelineCLI:
         part1_filters = [i.ljust(ljust) for i in part1_filters]
         part1_transformers = [i.ljust(ljust) for i in part1_transformers]
 
-        helpstr.append("options:")
-        helpstr.append("  -help".ljust(ljust) + "   show this help message and sys.exit")
-        helpstr.append("  -t".ljust(ljust) + "   number of threads to use (default: cpu_count - 1)")
+        flags_help.append("\noptions:")
+        flags_help.append("  -help".ljust(ljust) + "   show this help message and exit")
+        flags_help.append(
+            "  -t".ljust(ljust) + f"   number of threads to use (default: {cpu_count() - 1})"
+        )
 
-        helpstr.append("\nfilters:")
+        flags_help.append("\nfilters:")
         for f, cmd_help in zip(self.filters, part1_filters):
-            helpstr.append(f"{cmd_help}   {get_description(f)}")
+            flags_help.append(f"{cmd_help}   {get_description(f)}")
 
-        helpstr.append("\ntransformers:")
+        flags_help.append("\ntransformers:")
         for t, cmd_help in zip(self.transformers, part1_transformers):
-            helpstr.append(f"{cmd_help}   {get_description(t)}")
+            flags_help.append(f"{cmd_help}   {get_description(t)}")
 
-        self.help = self.description + "\n".join(helpstr)
+        self.help = self.get_help_str(flags_help)
+
+    def get_help_str(self, flags_help: list[str]):
+        return self.description + "\n" + self.base_description + "\n".join(flags_help)
 
     def parse_args(self) -> tuple[list[str], list[PipelineAction]]:
         args = sys.argv[1:]
@@ -187,7 +194,7 @@ class PyPipelineCLI:
                     continue
                 if arg[1:] in self.commands:
                     cmd = arg[1:]
-                    inverted = cmd.startswith("!")
+                    inverted = cmd.endswith("!")
                     cmd_args = args[i + 1]
                     if inverted:
                         action = self.commands[cmd].parse(cmd_args, invert=True)
@@ -212,26 +219,36 @@ class PyPipelineCLI:
     def collect_items(self, items: list[str]) -> list[PipelineItem]:
         raise NotImplementedError
 
+    def print_result(self, items: ItemsContainer):
+        for item in items.kept:
+            print(item)
+
+    def _process_items(self, items: list[PipelineItem], actions: list[PipelineAction]):
+        pipeline = self._create_pipeline(actions)
+        if self.t != 1:
+            res = pipeline.process_multi(items, t=self.t)
+        else:
+            res = pipeline.process(items)
+        return res
+
+    def _create_pipeline(self, actions: list[PipelineAction]):
+        return self.pipeline_cls(actions=actions)
+
     def run(self):
         items, actions = self.parse_args()
         if items is None or actions is None:
-            self.log_info("no actions provided")
-            sys.exit(0)
+            self.log_error("no actions provided")
+            sys.exit(1)
 
         items = self.collect_items(items)
         if not items:
             self.log_info("no items to process")
             sys.exit(0)
 
-        pipeline = self.pipeline_cls(actions=actions)
-        if self.t != 1:
-            res = pipeline.process_multi(items, t=self.t)
-        else:
-            res = pipeline.process(items)
+        processed_items = self._process_items(items, actions)
 
-        if self.print_result:
-            for item in res.kept:
-                print(item)
+        if self.print_res:
+            self.print_result(processed_items)
 
 
 __all__ = ["PyPipelineCLI"]
