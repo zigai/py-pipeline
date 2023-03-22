@@ -55,7 +55,6 @@ class PyPipelineCLI:
 
         self._build_cli()
         self.valid_action_names = list(self.actions.keys())
-        self.valid_action_names.extend(RESERVED_ARGS)
 
         if run:
             self.run()
@@ -145,21 +144,25 @@ class PyPipelineCLI:
         i = 0
         while i < len(args):
             arg = args[i]
-            if len(arg) > 1 and arg[1:] in self.valid_action_names:
+            if len(arg) > 1 and (arg[1:] in self.valid_action_names or arg[1:] in RESERVED_ARGS):
                 if arg == "-help":
                     print(self.help)
                     sys.exit(ExitCodes.SUCCESS)
                 if arg == "-t":
                     self.t = int(args[i + 1])
-                    i += 1
+                    i += 2
+                    continue
                 if arg in ["-v", "-verbose"]:
                     self.verbose = True
+                    i += 1
+                    continue
                 if arg == "-mode":
                     self.mode = args[i + 1]
                     if not self.mode in ["kept", "discarded"]:
                         self.log_error(f"invalid mode: {self.mode}")
                         sys.exit(ExitCodes.INPUT_ERROR)
-                    i += 1
+                    i += 2
+                    continue
                 if arg[1:] in self.actions:
                     cmd = arg[1:]
                     cmd_args = args[i + 1]
@@ -170,7 +173,7 @@ class PyPipelineCLI:
                     actions.append(action)
                     i += 1
                 else:
-                    self.log_error(f"unknown command: {arg}")
+                    self.log_error(f"unknown argument: {arg}")
                     sys.exit(ExitCodes.PARSING_ERROR)
             else:
                 if not arg.startswith("-"):
