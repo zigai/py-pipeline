@@ -27,7 +27,7 @@ class PyPipelineCLI:
     flag_prefix_short = "-"
     flag_prefix_long = "-"
     pipeline_cls = Pipeline
-    base_description = "Filters can be inverted by adding a '!' after the flag .\n"
+    base_description = "Filters can be inverted by adding a '!' after the flag\n"
     name = "PyPipeline"
 
     def __init__(
