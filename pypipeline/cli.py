@@ -24,7 +24,8 @@ class ExitCodes:
 class PyPipelineCLI:
     min_ljust = 8
     max_ljust = 24
-    flag_prefix = "-"
+    flag_prefix_short = "-"
+    flag_prefix_long = "-"
     pipeline_cls = Pipeline
     base_description = "Filters can be inverted by adding a '!' after the flag .\n"
     name = "PyPipeline"
@@ -44,7 +45,7 @@ class PyPipelineCLI:
         self.description = description or ""
         self.print_res = print_res
         self.err_label = colored(f"[{self.name}]", "red")
-        self.commands = {}
+        self.actions = {}
         self.help = None
         self.t = cpu_count() - 1
         self.verbose = False
@@ -53,34 +54,36 @@ class PyPipelineCLI:
         fill_missing_abbrevs(*self.filters, *self.transformers, taken=self.taken_abbrevs)
 
         self._build_cli()
-        self.valid_command_names = list(self.commands.keys())
-        self.valid_command_names.extend(RESERVED_ARGS)
+        self.valid_action_names = list(self.actions.keys())
+        self.valid_action_names.extend(RESERVED_ARGS)
 
         if run:
             self.run()
 
-    def _build_help_cmd_names(self, actions: list[PipelineAction]) -> list[str]:
-        command_names = []
+    def _collect_actions(self, actions: list[PipelineAction]) -> list[str]:
+        names = []
         for action in actions:
             flag_long = kebab_case(action.__name__)  # type: ignore
             if action.abbrev is None:
                 flag_short = flag_long
-                command_names.append(f"  {self.flag_prefix}{flag_short}")
-                self.commands[flag_short] = action
+                names.append(f"  {self.flag_prefix_short}{flag_short}")
+                self.actions[flag_short] = action
                 if issubclass(action, Filter):  # type:ignore
-                    self.commands[flag_short + "!"] = action
+                    self.actions[flag_short + "!"] = action
                 continue
 
             flag_short = action.abbrev
-            self.commands[flag_long] = action
-            self.commands[flag_short] = action
+            self.actions[flag_long] = action
+            self.actions[flag_short] = action
 
             if issubclass(action, Filter):  # type:ignore
-                self.commands[flag_long + "!"] = action
-                self.commands[flag_short + "!"] = action
-            command_names.append(f"  {self.flag_prefix}{flag_short}, {self.flag_prefix}{flag_long}")
+                self.actions[flag_long + "!"] = action
+                self.actions[flag_short + "!"] = action
+            names.append(
+                f"  {self.flag_prefix_short}{flag_short}, {self.flag_prefix_long}{flag_long}"
+            )
 
-        return command_names
+        return names
 
     def log_error(self, message: str):
         print(f"{self.err_label} {message}", file=sys.stderr)
@@ -91,39 +94,43 @@ class PyPipelineCLI:
         print(f"[{self.name}] {message}")
 
     def _build_cli(self):
-        flags_help = []
+        flag_help_filters = self._collect_actions(self.filters)
+        flags_help_transformers = self._collect_actions(self.transformers)
 
-        part1_filters = self._build_help_cmd_names(self.filters)
-        part1_transformers = self._build_help_cmd_names(self.transformers)
-        mx_len_filters = max([len(i) for i in part1_filters])
-        mx_len_transformers = max([len(i) for i in part1_transformers])
+        mx_len_filters = max([len(i) for i in flag_help_filters])
+        mx_len_transformers = max([len(i) for i in flags_help_transformers])
+        ljust = self._get_ljust(mx_len_filters, mx_len_transformers)
 
-        ljust = max(mx_len_filters, mx_len_transformers, self.min_ljust)
-        ljust = min(ljust, self.max_ljust)
-        part1_filters = [i.ljust(ljust) for i in part1_filters]
-        part1_transformers = [i.ljust(ljust) for i in part1_transformers]
+        flag_help_filters = [i.ljust(ljust) for i in flag_help_filters]
+        flags_help_transformers = [i.ljust(ljust) for i in flags_help_transformers]
 
-        flags_help.append("\noptions:")
-        flags_help.append("  -help".ljust(ljust) + "   show this help message and exit")
-        flags_help.append(
-            "  -mode".ljust(ljust) + "   display kept or discarded items (default: 'kept')"
-        )
-        flags_help.append(
-            "  -t".ljust(ljust) + f"   number of threads to use (default: {cpu_count() - 1})"
-        )
-        flags_help.append(
-            "  -v, -verbose".ljust(ljust) + "   verbose mode (extra log messages and progress bars)"
-        )
+        flags_help = self._get_options_help_section(ljust)
 
         flags_help.append("\nfilters:")
-        for f, flag_help in zip(self.filters, part1_filters):
-            flags_help.append(f"{flag_help}   {get_action_description(f)}")
+        for action, flag_help in zip(self.filters, flag_help_filters):
+            flags_help.append(f"{flag_help}   {get_action_description(action)}")
 
         flags_help.append("\ntransformers:")
-        for t, flag_help in zip(self.transformers, part1_transformers):
-            flags_help.append(f"{flag_help}   {get_action_description(t)}")
+        for action, flag_help in zip(self.transformers, flags_help_transformers):
+            flags_help.append(f"{flag_help}   {get_action_description(action)}")
 
         self.help = self.get_help_str(flags_help)
+
+    def _get_ljust(self, *section_flag_lengths: int) -> int:
+        ljust = max(*section_flag_lengths, self.min_ljust)
+        ljust = min(ljust, self.max_ljust)
+        return ljust
+
+    def _get_options_help_section(self, ljust: int) -> list[str]:
+        return [
+            "\noptions:\n" + "\n",
+            f"  -help".ljust(ljust) + "   show this help message and exit",
+            f"  -mode".ljust(ljust)
+            + f"   display kept or discarded items (default: '{self.mode}')",
+            f"  -t".ljust(ljust) + f"   number of threads to use (default: {self.t})",
+            f"  -v, -verbose".ljust(ljust)
+            + "   verbose mode (extra log messages and progress bars)",
+        ]
 
     def get_help_str(self, flags_help: list[str]):
         return self.description + "\n" + self.base_description + "\n".join(flags_help)
@@ -138,7 +145,7 @@ class PyPipelineCLI:
         i = 0
         while i < len(args):
             arg = args[i]
-            if len(arg) > 1 and arg[1:] in self.valid_command_names:
+            if len(arg) > 1 and arg[1:] in self.valid_action_names:
                 if arg == "-help":
                     print(self.help)
                     sys.exit(ExitCodes.SUCCESS)
@@ -153,11 +160,11 @@ class PyPipelineCLI:
                         self.log_error(f"invalid mode: {self.mode}")
                         sys.exit(ExitCodes.INPUT_ERROR)
                     i += 1
-                if arg[1:] in self.commands:
+                if arg[1:] in self.actions:
                     cmd = arg[1:]
                     cmd_args = args[i + 1]
                     inverted = cmd.endswith("!")
-                    action = self.commands[cmd].parse(
+                    action = self.actions[cmd].parse(
                         cmd_args, **{"invert": inverted} if inverted else {}
                     )
                     actions.append(action)
