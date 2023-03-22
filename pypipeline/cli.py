@@ -11,7 +11,7 @@ from pypipeline.pipeline import Pipeline
 from pypipeline.pipeline_action import PipelineAction
 from pypipeline.pipeline_item import PipelineItem
 
-RESERVED_ARGS = ["help", "t", "v", "verbose"]
+RESERVED_ARGS = ["help", "t", "v", "verbose", "mode"]
 
 
 class ExitCodes:
@@ -87,6 +87,9 @@ def get_action_description(action: PipelineAction):
     return ""
 
 
+from typing import Literal
+
+
 class PyPipelineCLI:
     min_ljust = 8
     max_ljust = 24
@@ -100,9 +103,11 @@ class PyPipelineCLI:
         filters: list | None = None,
         transformers: list | None = None,
         description: str = None,  # type: ignore
+        mode: Literal["kept", "discarded"] = "kept",
         print_res=True,
         run=True,
     ) -> None:
+        self.mode = mode
         self.filters = filters or []
         self.transformers = transformers or []
         self.description = description or ""
@@ -170,6 +175,9 @@ class PyPipelineCLI:
         flags_help.append("\noptions:")
         flags_help.append("  -help".ljust(ljust) + "   show this help message and exit")
         flags_help.append(
+            "  -mode".ljust(ljust) + "   display kept or discarded items (default: 'kept')"
+        )
+        flags_help.append(
             "  -t".ljust(ljust) + f"   number of threads to use (default: {cpu_count() - 1})"
         )
         flags_help.append(
@@ -208,6 +216,12 @@ class PyPipelineCLI:
                     i += 1
                 if arg in ["-v", "-verbose"]:
                     self.verbose = True
+                if arg == "-mode":
+                    self.mode = args[i + 1]
+                    if not self.mode in ["kept", "discarded"]:
+                        self.log_error(f"invalid mode: {self.mode}")
+                        sys.exit(ExitCodes.INPUT_ERROR)
+                    i += 1
                 if arg[1:] in self.commands:
                     cmd = arg[1:]
                     cmd_args = args[i + 1]
@@ -249,8 +263,12 @@ class PyPipelineCLI:
         raise NotImplementedError
 
     def print_result(self, items: ItemsContainer):
-        for item in items.kept:
-            print(item)
+        if self.mode == "kept":
+            for item in items.kept:
+                print(item)
+        else:
+            for i in items.discarded:
+                print(i)
 
     def run(self):
         try:
