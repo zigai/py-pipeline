@@ -2,7 +2,7 @@ import sys
 from multiprocessing import cpu_count
 from typing import Literal
 
-from stdl.str_u import colored, kebab_case, snake_case
+from stdl.str_u import colored, kebab_case
 
 from pypipeline.filter import Filter
 from pypipeline.items_container import ItemsContainer
@@ -67,7 +67,7 @@ class PyPipelineCLI:
                 flag_short = flag_long
                 command_names.append(f"  {self.flag_prefix}{flag_short}")
                 self.commands[flag_short] = action
-                if issubclass(action, Filter):
+                if issubclass(action, Filter):  # type:ignore
                     self.commands[flag_short + "!"] = action
                 continue
 
@@ -75,7 +75,7 @@ class PyPipelineCLI:
             self.commands[flag_long] = action
             self.commands[flag_short] = action
 
-            if issubclass(action, Filter):
+            if issubclass(action, Filter):  # type:ignore
                 self.commands[flag_long + "!"] = action
                 self.commands[flag_short + "!"] = action
             command_names.append(f"  {self.flag_prefix}{flag_short}, {self.flag_prefix}{flag_long}")
