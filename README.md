@@ -10,7 +10,7 @@
 - Pipelines are built by chaining multiple ```Actions``` and evaluating them on data
 - Two types of ```Actions```:
 	- ```Filters``` discard pipeline items based on provided conditions. Discarded items are ignored by subsequent actions
-	- ```Transformers``` modifiy item data
+	- ```Transformers``` modify item data
 - Easily create CLIs for you pipeline
 - Use multiple CPU cores for processing
 
