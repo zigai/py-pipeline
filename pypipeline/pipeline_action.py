@@ -1,3 +1,7 @@
+import inspect
+
+import docstring_parser
+
 from pypipeline.pipeline_item import PipelineItem
 
 
@@ -46,6 +50,18 @@ def get_parsable_actions(actions: list[PipelineAction]) -> list[PipelineAction]:
         except TypeError:
             parsable.append(action)
     return parsable
+
+
+def get_action_description(action: PipelineAction):
+    doc = inspect.getdoc(action)
+    if doc is None:
+        return ""
+    doc = docstring_parser.parse(doc)
+    if doc.short_description:
+        return doc.short_description
+    if doc.long_description:
+        return doc.long_description
+    return ""
 
 
 __all__ = ["PipelineAction", "get_parsable_actions"]

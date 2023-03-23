@@ -1,3 +1,4 @@
+import inspect
 import sys
 from multiprocessing import cpu_count
 from typing import Literal
@@ -7,11 +8,19 @@ from stdl.str_u import colored, kebab_case
 from pypipeline.filter import Filter
 from pypipeline.items_container import ItemsContainer
 from pypipeline.pipeline import Pipeline
-from pypipeline.pipeline_action import PipelineAction
+from pypipeline.pipeline_action import PipelineAction, get_action_description
 from pypipeline.pipeline_item import PipelineItem
-from pypipeline.util import fill_missing_abbrevs, get_action_description, get_taken_abbrevs
+from pypipeline.util import fill_missing_abbrevs, get_executable_name, get_taken_abbrevs
 
 RESERVED_ARGS = ["help", "t", "v", "verbose", "mode"]
+
+
+def get_action_help(action: PipelineAction):
+    docstr = inspect.getdoc(action)
+    action_type = "Filter" if issubclass(action, Filter) else "Transformer"
+    action_name = kebab_case(action.__name__)
+    action_abbrev = action.abbrev
+    return f"{action_name} | {action_type} | Abbrev='{action_abbrev}' | Priority={action.priority}\n\n{docstr}"
 
 
 class ExitCodes:
@@ -25,9 +34,9 @@ class PyPipelineCLI:
     min_ljust = 8
     max_ljust = 24
     flag_prefix_short = "-"
-    flag_prefix_long = "-"
+    flag_prefix_long = "--"
     pipeline_cls = Pipeline
-    base_description = "Filters can be inverted by adding a '!' after the flag\n"
+
     name = "PyPipeline"
 
     def __init__(
@@ -50,6 +59,7 @@ class PyPipelineCLI:
         self.t = cpu_count() - 1
         self.verbose = False
         self.items = []
+        self.executable = get_executable_name()
         self.taken_abbrevs = get_taken_abbrevs(*self.filters, *self.transformers)
         fill_missing_abbrevs(*self.filters, *self.transformers, taken=self.taken_abbrevs)
 
@@ -115,16 +125,30 @@ class PyPipelineCLI:
 
         self.help = self.get_help_str(flags_help)
 
+    def _remove_flag_prefix(self, flag: str) -> str:
+        if flag.startswith(self.flag_prefix_long):
+            return flag[2:]
+        if flag.startswith(self.flag_prefix_short):
+            return flag[1:]
+        return flag
+
     def _get_ljust(self, *section_flag_lengths: int) -> int:
         ljust = max(*section_flag_lengths, self.min_ljust)
         ljust = min(ljust, self.max_ljust)
         return ljust
 
+    def _get_usage_notes(self) -> list[str]:
+        return [
+            f"\n\nnotes:",
+            "  filters can be inverted by adding a '!' after the flag",
+            f"  you can get help for a specific action by running '{self.executable} <action> --help'\n",
+        ]
+
     def _get_options_help_section(self, ljust: int) -> list[str]:
         return [
-            "\noptions:\n\n",
-            f"  -help".ljust(ljust) + "   show this help message and exit",
-            f"  -mode".ljust(ljust)
+            "\noptions:",
+            f"  --help".ljust(ljust) + "   show this help message and exit",
+            f"  --mode".ljust(ljust)
             + f"   display kept or discarded items (default: '{self.mode}')",
             f"  -t".ljust(ljust) + f"   number of threads to use (default: {self.t})",
             f"  -v, -verbose".ljust(ljust)
@@ -132,54 +156,56 @@ class PyPipelineCLI:
         ]
 
     def get_help_str(self, flags_help: list[str]):
-        return self.description + "\n" + self.base_description + "\n".join(flags_help)
+        return self.description + "\n" + "\n".join(flags_help) + "\n".join(self._get_usage_notes())
 
     def parse_args(self) -> list[PipelineAction]:
         args = sys.argv[1:]
         if not args:
-            self.log_error(f"no arguments provided. use -help flag for help")
+            self.log_error(f"no arguments provided. run '{self.executable} --help' for help")
             sys.exit(ExitCodes.INPUT_ERROR)
 
         actions = []
         i = 0
         while i < len(args):
-            arg = args[i]
-            if len(arg) > 1 and (arg[1:] in self.valid_action_names or arg[1:] in RESERVED_ARGS):
-                if arg == "-help":
+            arg = self._remove_flag_prefix(args[i])
+            if len(arg) > 1 and (arg in self.valid_action_names or arg in RESERVED_ARGS):
+                if args[i] == "--help":
                     print(self.help)
                     sys.exit(ExitCodes.SUCCESS)
-                if arg == "-t":
+                if args[i] == "-t":
                     self.t = int(args[i + 1])
                     i += 2
                     continue
-                if arg in ["-v", "-verbose"]:
+                if args[i] in ["-v", "--verbose"]:
                     self.verbose = True
                     i += 1
                     continue
-                if arg == "-mode":
+                if args[i] == "--mode":
                     self.mode = args[i + 1]
                     if not self.mode in ["kept", "discarded"]:
                         self.log_error(f"invalid mode: {self.mode}")
                         sys.exit(ExitCodes.INPUT_ERROR)
                     i += 2
                     continue
-                if arg[1:] in self.available_actions:
-                    action_name = arg[1:]
-                    inverted = action_name.endswith("!")
+                if arg in self.available_actions:
+                    inverted = arg.endswith("!")
                     action_args = args[i + 1]
-                    action = self.available_actions[action_name].parse(
+                    if action_args == "--help":
+                        print(get_action_help(self.available_actions[arg]))
+                        sys.exit(ExitCodes.SUCCESS)
+                    action = self.available_actions[arg].parse(
                         action_args, **{"invert": inverted} if inverted else {}
                     )
                     actions.append(action)
                     i += 1
                 else:
-                    self.log_error(f"unknown argument: {arg}")
+                    self.log_error(f"unknown argument: {args[i]}")
                     sys.exit(ExitCodes.PARSING_ERROR)
             else:
                 if not arg.startswith("-"):
                     self.items.append(arg)
                 else:
-                    self.log_error(f"unknown argument: {arg}")
+                    self.log_error(f"unknown argument: {args[i]}")
                     sys.exit(ExitCodes.PARSING_ERROR)
             i += 1
         return actions
@@ -219,7 +245,9 @@ class PyPipelineCLI:
             sys.exit(ExitCodes.PARSING_ERROR)
 
         if actions is None:
-            self.log_error("no actions provided. use -help flag for help")
+            self.log_error(
+                f"no actions provided. run '{self.executable} --help' to see available actions"
+            )
             sys.exit(ExitCodes.INPUT_ERROR)
 
         try:

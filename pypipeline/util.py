@@ -1,7 +1,6 @@
-import inspect
 import re
+import sys
 
-import docstring_parser
 from stdl.str_u import snake_case
 
 from pypipeline.pipeline_action import PipelineAction
@@ -71,13 +70,5 @@ def fill_missing_abbrevs(*actions: PipelineAction, taken: list[str]):
             i.abbrev = get_command_abbrev(snake_case(i.__class__.__name__), taken=taken)
 
 
-def get_action_description(action: PipelineAction):
-    doc = inspect.getdoc(action)
-    if doc is None:
-        return ""
-    doc = docstring_parser.parse(doc)
-    if doc.short_description:
-        return doc.short_description
-    if doc.long_description:
-        return doc.long_description
-    return ""
+def get_executable_name():
+    return sys.argv[0].split("/")[-1]
