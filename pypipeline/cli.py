@@ -137,6 +137,9 @@ class PyPipelineCLI:
         ljust = min(ljust, self.max_ljust)
         return ljust
 
+    def _get_usage_section(self) -> str:
+        return f"usage: {self.executable} [--help] [-v] [--mode] MODE [-t] T [actions] [items]"
+
     def _get_usage_notes(self) -> list[str]:
         return [
             f"\n\nnotes:",
@@ -156,7 +159,13 @@ class PyPipelineCLI:
         ]
 
     def get_help_str(self, flags_help: list[str]):
-        return self.description + "\n" + "\n".join(flags_help) + "\n".join(self._get_usage_notes())
+        return (
+            self._get_usage_section()
+            + self.description
+            + "\n"
+            + "\n".join(flags_help)
+            + "\n".join(self._get_usage_notes())
+        )
 
     def parse_args(self) -> list[PipelineAction]:
         args = sys.argv[1:]
