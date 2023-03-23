@@ -45,16 +45,16 @@ class PyPipelineCLI:
         self.description = description or ""
         self.print_res = print_res
         self.err_label = colored(f"[{self.name}]", "red")
-        self.actions = {}
+        self.available_actions: dict[str, PipelineAction] = {}
         self.help = None
         self.t = cpu_count() - 1
         self.verbose = False
-
+        self.items = []
         self.taken_abbrevs = get_taken_abbrevs(*self.filters, *self.transformers)
         fill_missing_abbrevs(*self.filters, *self.transformers, taken=self.taken_abbrevs)
 
         self._build_cli()
-        self.valid_action_names = list(self.actions.keys())
+        self.valid_action_names = list(self.available_actions.keys())
 
         if run:
             self.run()
@@ -66,18 +66,18 @@ class PyPipelineCLI:
             if action.abbrev is None:
                 flag_short = flag_long
                 names.append(f"  {self.flag_prefix_short}{flag_short}")
-                self.actions[flag_short] = action
+                self.available_actions[flag_short] = action
                 if issubclass(action, Filter):  # type:ignore
-                    self.actions[flag_short + "!"] = action
+                    self.available_actions[flag_short + "!"] = action
                 continue
 
             flag_short = action.abbrev
-            self.actions[flag_long] = action
-            self.actions[flag_short] = action
+            self.available_actions[flag_long] = action
+            self.available_actions[flag_short] = action
 
             if issubclass(action, Filter):  # type:ignore
-                self.actions[flag_long + "!"] = action
-                self.actions[flag_short + "!"] = action
+                self.available_actions[flag_long + "!"] = action
+                self.available_actions[flag_short + "!"] = action
             names.append(
                 f"  {self.flag_prefix_short}{flag_short}, {self.flag_prefix_long}{flag_long}"
             )
@@ -122,7 +122,7 @@ class PyPipelineCLI:
 
     def _get_options_help_section(self, ljust: int) -> list[str]:
         return [
-            "\noptions:\n" + "\n",
+            "\noptions:\n\n",
             f"  -help".ljust(ljust) + "   show this help message and exit",
             f"  -mode".ljust(ljust)
             + f"   display kept or discarded items (default: '{self.mode}')",
@@ -134,13 +134,13 @@ class PyPipelineCLI:
     def get_help_str(self, flags_help: list[str]):
         return self.description + "\n" + self.base_description + "\n".join(flags_help)
 
-    def parse_args(self) -> tuple[list[str], list[PipelineAction]]:
+    def parse_args(self) -> list[PipelineAction]:
         args = sys.argv[1:]
         if not args:
             self.log_error(f"no arguments provided. use -help flag for help")
             sys.exit(ExitCodes.INPUT_ERROR)
 
-        items, actions = [], []
+        actions = []
         i = 0
         while i < len(args):
             arg = args[i]
@@ -163,12 +163,12 @@ class PyPipelineCLI:
                         sys.exit(ExitCodes.INPUT_ERROR)
                     i += 2
                     continue
-                if arg[1:] in self.actions:
-                    cmd = arg[1:]
-                    cmd_args = args[i + 1]
-                    inverted = cmd.endswith("!")
-                    action = self.actions[cmd].parse(
-                        cmd_args, **{"invert": inverted} if inverted else {}
+                if arg[1:] in self.available_actions:
+                    action_name = arg[1:]
+                    inverted = action_name.endswith("!")
+                    action_args = args[i + 1]
+                    action = self.available_actions[action_name].parse(
+                        action_args, **{"invert": inverted} if inverted else {}
                     )
                     actions.append(action)
                     i += 1
@@ -177,12 +177,12 @@ class PyPipelineCLI:
                     sys.exit(ExitCodes.PARSING_ERROR)
             else:
                 if not arg.startswith("-"):
-                    items.append(arg)
+                    self.items.append(arg)
                 else:
                     self.log_error(f"unknown argument: {arg}")
                     sys.exit(ExitCodes.PARSING_ERROR)
             i += 1
-        return items, actions
+        return actions
 
     def _process_items(self, items: list[PipelineItem], actions: list[PipelineAction]):
         pipeline = self._create_pipeline(actions)
@@ -213,17 +213,17 @@ class PyPipelineCLI:
 
     def run(self):
         try:
-            items, actions = self.parse_args()
+            actions = self.parse_args()
         except Exception as e:
             self.log_error(f"error while parsing arguments: {e}")
             sys.exit(ExitCodes.PARSING_ERROR)
 
-        if items is None or actions is None:
+        if actions is None:
             self.log_error("no actions provided. use -help flag for help")
             sys.exit(ExitCodes.INPUT_ERROR)
 
         try:
-            items = self.collect_items(items)
+            items = self.collect_items(self.items)
         except Exception as e:
             self.log_error(f"error while collecting items: {e}")
             sys.exit(ExitCodes.INPUT_ERROR)
