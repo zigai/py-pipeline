@@ -8,8 +8,8 @@ REQUIREMENTS = (HERE / "requirements.txt").read_text()
 
 setup(
     name="py-pipeline",
-    version="0.0.1",
-    description="",
+    version="0.1.0",
+    description="PyPipeline is a simple Python framework for building data processing pipelines.",
     long_description=README,
     long_description_content_type="text/markdown",
     author="Žiga Ivanšek",
