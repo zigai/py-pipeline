@@ -1,10 +1,12 @@
+from pypipeline.action import Action
 from pypipeline.constants import SEP
-from pypipeline.pipeline_action import PipelineAction
-from pypipeline.pipeline_item import PipelineItem
+from pypipeline.item import Item
 
 
-class Transformer(PipelineAction):
-    def process(self, item: PipelineItem) -> PipelineItem:
+class Transformer(Action):
+    type = "transformer"
+
+    def process(self, item: Item) -> Item:
         return NotImplemented
 
 

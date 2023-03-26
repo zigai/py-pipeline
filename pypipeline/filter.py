@@ -1,21 +1,23 @@
 import re
 from fnmatch import fnmatch
 
+from pypipeline.action import Action
 from pypipeline.constants import INT_MAX, INT_MIN, SEP
-from pypipeline.pipeline_action import PipelineAction
-from pypipeline.pipeline_item import PipelineItem
+from pypipeline.item import Item
 from pypipeline.util import get_pattern_type
 
 
-class Filter(PipelineAction):
+class Filter(Action):
+    type = "filter"
+
     def __init__(self, invert=False) -> None:
         self.invert = invert
         super().__init__()
 
-    def process(self, item: PipelineItem) -> bool:
+    def process(self, item: Item) -> bool:
         return NotImplemented
 
-    def eval(self, item: PipelineItem) -> PipelineItem:
+    def eval(self, item: Item) -> Item:
         res = self.process(item)
         if self.invert:
             res = not res
@@ -31,7 +33,7 @@ class IntFilter(Filter):
         self.high = high
         super().__init__(invert)
 
-    def validate_args(self):
+    def validate(self):
         if self.low > self.high:
             raise ValueError
 

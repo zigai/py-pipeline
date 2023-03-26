@@ -3,7 +3,7 @@ import sys
 
 from stdl.str_u import snake_case
 
-from pypipeline.pipeline_action import PipelineAction
+from pypipeline.action import Action
 
 
 def get_pattern_type(pattern: str):
@@ -16,7 +16,7 @@ def get_pattern_type(pattern: str):
         return None
 
 
-def get_command_abbrev(name: str, taken: list[str]) -> str | None:
+def get_abbreviation(name: str, taken: list[str]) -> str | None:
     """
     Tries to return a short name for a command.
     Returns None if it cannot find a short name.
@@ -53,7 +53,7 @@ def get_command_abbrev(name: str, taken: list[str]) -> str | None:
         return None
 
 
-def get_taken_abbrevs(*actions: PipelineAction) -> list[str]:
+def get_taken_abbreviations(*actions: Action) -> list[str]:
     taken = []
     for i in actions:
         if i.abbrev is None:
@@ -64,11 +64,13 @@ def get_taken_abbrevs(*actions: PipelineAction) -> list[str]:
     return taken
 
 
-def fill_missing_abbrevs(*actions: PipelineAction, taken: list[str]):
+def fill_missing_abbreviations(*actions: Action, taken: list[str]):
     for i in actions:
         if i.abbrev is None:
-            i.abbrev = get_command_abbrev(snake_case(i.__class__.__name__), taken=taken)
+            i.abbrev = get_abbreviation(snake_case(i.__class__.__name__), taken=taken)
 
 
-def get_executable_name():
+def get_executable_name(*, full=False) -> str:
+    if full:
+        return sys.argv[0]
     return sys.argv[0].split("/")[-1]

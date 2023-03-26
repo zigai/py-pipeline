@@ -3,16 +3,14 @@ import multiprocessing
 from stdl.lst import split
 from tqdm import tqdm
 
+from pypipeline.action import Action
+from pypipeline.item import Item
 from pypipeline.items_container import ItemsContainer
-from pypipeline.pipeline_action import PipelineAction
-from pypipeline.pipeline_item import PipelineItem
 
 
 class Pipeline:
-    def __init__(
-        self, actions: list[PipelineAction] | None = None, on_discrad=True, verbose=False
-    ) -> None:
-        self.actions: list[PipelineAction] = []
+    def __init__(self, actions: list[Action] | None = None, on_discrad=True, verbose=False) -> None:
+        self.actions: list[Action] = []
         if actions:
             self.actions.extend(actions)
         self.lock = multiprocessing.Manager().Lock()
@@ -21,10 +19,10 @@ class Pipeline:
         if not self.verbose:
             self.process = self.process_no_bar
 
-    def add_action(self, action: PipelineAction):
+    def add_action(self, action: Action):
         self.actions.append(action)
 
-    def process_item(self, item: PipelineItem) -> PipelineItem:
+    def process_item(self, item: Item) -> Item:
         if item.discarded:
             return item
         for action in self.actions:
@@ -62,7 +60,7 @@ class Pipeline:
         """
         return ItemsContainer([self.process_item(item) for item in items])
 
-    def process_multi(self, items: list[PipelineItem], t: int):
+    def process_multi(self, items: list[Item], t: int):
         """
         Process a list of items in parallel using multiple threads.
 
@@ -100,11 +98,11 @@ class PriorityPipeline(Pipeline):
     A subclass of Pipeline that sorts the pipeline actions by priority
     """
 
-    def __init__(self, actions: list[PipelineAction] | None = None) -> None:
+    def __init__(self, actions: list[Action] | None = None) -> None:
         super().__init__(actions)
         self.actions.sort()
 
-    def add_action(self, action: PipelineAction):
+    def add_action(self, action: Action):
         super().add_action(action)
         self.actions.sort()
 

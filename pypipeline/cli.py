@@ -1,98 +1,153 @@
 import inspect
 import sys
+from functools import cached_property
 from multiprocessing import cpu_count
 from typing import Literal
 
+import docstring_parser
+from stdl.fs import read_stdin
 from stdl.str_u import colored, kebab_case
 
-from pypipeline.filter import Filter
+from pypipeline.action import Action
+from pypipeline.constants import (
+    CLI_HELP_INDENT,
+    CLI_MAX_LJUST,
+    CLI_MIN_LJUST,
+    FILTER_INVERT_SUFFIX,
+    FLAG_PREFIX_LONG,
+    FLAG_PREFIX_SHORT,
+    RESERVED_FLAGS,
+    ExitCodes,
+)
+from pypipeline.item import Item
 from pypipeline.items_container import ItemsContainer
 from pypipeline.pipeline import Pipeline
-from pypipeline.pipeline_action import PipelineAction, get_action_description
-from pypipeline.pipeline_item import PipelineItem
-from pypipeline.util import fill_missing_abbrevs, get_executable_name, get_taken_abbrevs
-
-RESERVED_ARGS = ["help", "t", "v", "verbose", "mode"]
+from pypipeline.util import fill_missing_abbreviations, get_executable_name, get_taken_abbreviations
 
 
-def get_action_help(action: PipelineAction):
-    docstr = inspect.getdoc(action)
-    action_type = "Filter" if issubclass(action, Filter) else "Transformer"
-    action_name = kebab_case(action.__name__)
-    action_abbrev = action.abbrev
-    return f"{action_name} | {action_type} | Abbrev='{action_abbrev}' | Priority={action.priority}\n\n{docstr}"
+class ActionContainer:
+    def __init__(self, action: Action) -> None:
+        self.cls = action
+
+    def __repr__(self) -> str:
+        return f"ActionContainer(for:'{self.name}', CLI flags:'{self.cli_help_flag}')"  # type: ignore
+
+    @property
+    def name(self):
+        return self.cls.__name__  # type:ignore
+
+    @cached_property
+    def flag_short(self):
+        if not self.cls.abbrev:
+            return None
+        return FLAG_PREFIX_SHORT + self.cls.abbrev
+
+    @cached_property
+    def flag_long(self):
+        return FLAG_PREFIX_LONG + kebab_case(self.name)
+
+    @cached_property
+    def description(self) -> str:
+        doc = self.cls.get_docstr()
+        if doc is None:
+            return ""
+        doc = docstring_parser.parse(doc)
+        if doc.short_description:
+            return doc.short_description
+        if doc.long_description:
+            return doc.long_description
+        return ""
+
+    @cached_property
+    def cli_help_flag(self):
+        if self.flag_short is None:
+            return f"{CLI_HELP_INDENT * ' '}{self.flag_long}"
+        return f"{CLI_HELP_INDENT * ' '}{self.flag_short}, {self.flag_long}"
+
+    def get_help_long(self):
+        docstr = inspect.getdoc(self.cls)
+        action_name = kebab_case(self.name)
+        return f"{action_name} | {self.cls.type} | abbrev='{self.cls.abbrev}' | priority={self.cls.priority}\n\n{docstr}"
 
 
-class ExitCodes:
-    SUCCESS = 0
-    INPUT_ERROR = 1
-    PARSING_ERROR = 2
-    PROCESSING_ERROR = 3
+class CommandLineActionsManager:
+    def __init__(self, actions: list[Action]) -> None:
+        actions_abbrevs = get_taken_abbreviations(*actions or [])
+        for i in actions_abbrevs:
+            if i in RESERVED_FLAGS:
+                raise ValueError(f"action abbrevation can't be any of: {', '.join(RESERVED_FLAGS)}")
+
+        self.taken_flags = [*RESERVED_FLAGS, *get_taken_abbreviations(*actions)]
+        fill_missing_abbreviations(*actions, taken=self.taken_flags)
+        self.cli_action_map: dict[str, ActionContainer] = {}
+        self.actions = [ActionContainer(i) for i in actions]
+        self.collect_actions()
+
+    def collect_actions(self) -> None:
+        for action in self.actions:
+            self.cli_action_map[action.flag_long] = action
+            if action.flag_short:
+                self.cli_action_map[action.flag_short] = action  # type:ignore
+            if action.cls.type == "filter":
+                self.cli_action_map[action.flag_long + FILTER_INVERT_SUFFIX] = action
+                if action.flag_short:
+                    self.cli_action_map[
+                        action.flag_short + FILTER_INVERT_SUFFIX  # type:ignore
+                    ] = action
+
+    @cached_property
+    def ljust(self) -> int:
+        ljust = max(*[len(i.cli_help_flag) for i in self.actions], CLI_MIN_LJUST)
+        ljust = min(ljust, CLI_MAX_LJUST)
+        return ljust
+
+    def get_actions_help_section(self) -> str:
+        help_filters, help_transformers = ["\nfilters:"], ["\ntransformers:"]
+        for i in self.actions:
+            h = f"{i.cli_help_flag.ljust(self.ljust)}   {i.description}"
+            if i.cls.type == "filter":
+                help_filters.append(h)
+            elif i.cls.type == "transformer":
+                help_transformers.append(h)
+            else:
+                raise ValueError(i.cls.type)
+
+        return "\n".join([*help_filters, *help_transformers])
+
+    def get(self, name: str):
+        return self.cli_action_map.get(name, None)
 
 
 class PyPipelineCLI:
-    min_ljust = 8
-    max_ljust = 24
-    flag_prefix_short = "-"
-    flag_prefix_long = "--"
     pipeline_cls = Pipeline
-
     name = "PyPipeline"
 
     def __init__(
         self,
-        filters: list | None = None,
-        transformers: list | None = None,
+        actions: list[Action],
         description: str = None,  # type: ignore
         mode: Literal["kept", "discarded"] = "kept",
-        print_res=True,
+        print_results=True,
         run=True,
+        read_from_stdin=True,
     ) -> None:
         self.mode = mode
-        self.filters = filters or []
-        self.transformers = transformers or []
         self.description = description or ""
-        self.print_res = print_res
+        self.print_results = print_results
+        self.read_from_stdin = read_from_stdin
+
         self.err_label = colored(f"[{self.name}]", "red")
-        self.available_actions: dict[str, PipelineAction] = {}
-        self.help = None
+        self.executable = get_executable_name()
         self.t = cpu_count() - 1
         self.verbose = False
+        self.help = None
         self.items = []
-        self.executable = get_executable_name()
-        self.taken_abbrevs = get_taken_abbrevs(*self.filters, *self.transformers)
-        fill_missing_abbrevs(*self.filters, *self.transformers, taken=self.taken_abbrevs)
 
-        self._build_cli()
-        self.valid_action_names = list(self.available_actions.keys())
+        self.manager = CommandLineActionsManager(actions)
+        self.help = self._get_help_str()
 
         if run:
             self.run()
-
-    def _collect_actions(self, actions: list[PipelineAction]) -> list[str]:
-        names = []
-        for action in actions:
-            flag_long = kebab_case(action.__name__)  # type: ignore
-            if action.abbrev is None:
-                flag_short = flag_long
-                names.append(f"  {self.flag_prefix_short}{flag_short}")
-                self.available_actions[flag_short] = action
-                if issubclass(action, Filter):  # type:ignore
-                    self.available_actions[flag_short + "!"] = action
-                continue
-
-            flag_short = action.abbrev
-            self.available_actions[flag_long] = action
-            self.available_actions[flag_short] = action
-
-            if issubclass(action, Filter):  # type:ignore
-                self.available_actions[flag_long + "!"] = action
-                self.available_actions[flag_short + "!"] = action
-            names.append(
-                f"  {self.flag_prefix_short}{flag_short}, {self.flag_prefix_long}{flag_long}"
-            )
-
-        return names
 
     def log_error(self, message: str):
         print(f"{self.err_label} {message}", file=sys.stderr)
@@ -102,45 +157,17 @@ class PyPipelineCLI:
             return
         print(f"[{self.name}] {message}")
 
-    def _build_cli(self):
-        flag_help_filters = self._collect_actions(self.filters)
-        flags_help_transformers = self._collect_actions(self.transformers)
-
-        mx_len_filters = max([len(i) for i in flag_help_filters])
-        mx_len_transformers = max([len(i) for i in flags_help_transformers])
-        ljust = self._get_ljust(mx_len_filters, mx_len_transformers)
-
-        flag_help_filters = [i.ljust(ljust) for i in flag_help_filters]
-        flags_help_transformers = [i.ljust(ljust) for i in flags_help_transformers]
-
-        flags_help = self._get_options_help_section(ljust)
-
-        flags_help.append("\nfilters:")
-        for action, flag_help in zip(self.filters, flag_help_filters):
-            flags_help.append(f"{flag_help}   {get_action_description(action)}")
-
-        flags_help.append("\ntransformers:")
-        for action, flag_help in zip(self.transformers, flags_help_transformers):
-            flags_help.append(f"{flag_help}   {get_action_description(action)}")
-
-        self.help = self.get_help_str(flags_help)
-
-    def _remove_flag_prefix(self, flag: str) -> str:
-        if flag.startswith(self.flag_prefix_long):
-            return flag[2:]
-        if flag.startswith(self.flag_prefix_short):
-            return flag[1:]
+    def _remove_prefix(self, flag: str) -> str:
+        if flag.startswith(FLAG_PREFIX_LONG):
+            return flag[len(FLAG_PREFIX_LONG) :]
+        if flag.startswith(FLAG_PREFIX_SHORT):
+            return flag[len(FLAG_PREFIX_SHORT) :]
         return flag
-
-    def _get_ljust(self, *section_flag_lengths: int) -> int:
-        ljust = max(*section_flag_lengths, self.min_ljust)
-        ljust = min(ljust, self.max_ljust)
-        return ljust
 
     def _get_usage_section(self) -> str:
         return f"usage: {self.executable} [--help] [-v] [--mode] MODE [-t] T [actions] [items]"
 
-    def _get_usage_notes(self) -> list[str]:
+    def _get_usage_notes_section(self) -> list[str]:
         return [
             f"\n\nnotes:",
             "  filters can be inverted by adding a '!' after the flag",
@@ -151,23 +178,24 @@ class PyPipelineCLI:
         return [
             "\noptions:",
             f"  --help".ljust(ljust) + "   show this help message and exit",
-            f"  --mode".ljust(ljust)
-            + f"   display kept or discarded items (default: '{self.mode}')",
+            f"  --mode".ljust(ljust) + f"   display kept/discarded items (default: '{self.mode}')",
             f"  -t".ljust(ljust) + f"   number of threads to use (default: {self.t})",
             f"  -v, -verbose".ljust(ljust)
             + "   verbose mode (extra log messages and progress bars)",
         ]
 
-    def get_help_str(self, flags_help: list[str]):
+    def _get_help_str(self):
         return (
             self._get_usage_section()
             + self.description
             + "\n"
-            + "\n".join(flags_help)
-            + "\n".join(self._get_usage_notes())
+            + "\n".join(self._get_options_help_section(self.manager.ljust))
+            + "\n"
+            + self.manager.get_actions_help_section()
+            + "\n".join(self._get_usage_notes_section())
         )
 
-    def parse_args(self) -> list[PipelineAction]:
+    def parse_args(self) -> list[Action]:
         args = sys.argv[1:]
         if not args:
             self.log_error(f"no arguments provided. run '{self.executable} --help' for help")
@@ -176,50 +204,54 @@ class PyPipelineCLI:
         actions = []
         i = 0
         while i < len(args):
-            arg = self._remove_flag_prefix(args[i])
-            if len(arg) > 1 and (arg in self.valid_action_names or arg in RESERVED_ARGS):
-                if args[i] == "--help":
-                    print(self.help)
-                    sys.exit(ExitCodes.SUCCESS)
-                if args[i] == "-t":
-                    self.t = int(args[i + 1])
-                    i += 2
-                    continue
-                if args[i] in ["-v", "--verbose"]:
-                    self.verbose = True
-                    i += 1
-                    continue
-                if args[i] == "--mode":
-                    self.mode = args[i + 1]
-                    if not self.mode in ["kept", "discarded"]:
-                        self.log_error(f"invalid mode: {self.mode}")
-                        sys.exit(ExitCodes.INPUT_ERROR)
-                    i += 2
-                    continue
-                if arg in self.available_actions:
-                    inverted = arg.endswith("!")
-                    action_args = args[i + 1]
-                    if action_args == "--help":
-                        print(get_action_help(self.available_actions[arg]))
+            arg = self._remove_prefix(args[i])
+            if arg in RESERVED_FLAGS:
+                match arg:
+                    case "help":
+                        print(self.help)
                         sys.exit(ExitCodes.SUCCESS)
-                    action = self.available_actions[arg].parse(
-                        action_args, **{"invert": inverted} if inverted else {}
-                    )
-                    actions.append(action)
-                    i += 1
-                else:
-                    self.log_error(f"unknown argument: {args[i]}")
-                    sys.exit(ExitCodes.PARSING_ERROR)
+                    case "t":
+                        self.t = int(args[i + 1])
+                        i += 2
+                    case "mode":
+                        self.mode = args[i + 1]
+                        if not self.mode in ["kept", "discarded"]:
+                            self.log_error(f"invalid mode: {self.mode}")
+                            sys.exit(ExitCodes.INPUT_ERROR)
+                        i += 2
+                    case "v":
+                        self.verbose = True
+                        i += 1
+                    case "verbose":
+                        self.verbose = True
+                        i += 1
+                    case _:
+                        self.log_error(f"unknown argument: {args[i]}")
+                        sys.exit(ExitCodes.PARSING_ERROR)
+                continue
+            if action := self.manager.get(args[i]):
+                inverted = arg.endswith(FILTER_INVERT_SUFFIX)
+                action_cls = action.cls
+                action_args = args[i + 1]
+                if action_args == "--help":
+                    print(action.get_help_long())
+                    sys.exit(ExitCodes.SUCCESS)
+                action_obj = action_cls.parse(
+                    action_args, **{"invert": inverted} if inverted else {}
+                )
+                actions.append(action_obj)
+                i += 2
+                continue
+            if not arg.startswith(FLAG_PREFIX_LONG) and not arg.startswith(FLAG_PREFIX_SHORT):
+                self.items.append(arg)
+                i += 1
             else:
-                if not arg.startswith("-"):
-                    self.items.append(arg)
-                else:
-                    self.log_error(f"unknown argument: {args[i]}")
-                    sys.exit(ExitCodes.PARSING_ERROR)
-            i += 1
+                self.log_error(f"unknown argument: {args[i]}")
+                sys.exit(ExitCodes.PARSING_ERROR)
+
         return actions
 
-    def _process_items(self, items: list[PipelineItem], actions: list[PipelineAction]):
+    def _process_items(self, items: list[Item], actions: list[Action]):
         pipeline = self._create_pipeline(actions)
         if self.t != 1:
             if len(items) < self.t:
@@ -232,19 +264,19 @@ class PyPipelineCLI:
             res = pipeline.process(items)
         return res
 
-    def _create_pipeline(self, actions: list[PipelineAction]):
+    def _create_pipeline(self, actions: list[Action]):
         return self.pipeline_cls(actions=actions, verbose=self.verbose)
 
-    def collect_items(self, items: list[str]) -> list[PipelineItem]:
-        raise NotImplementedError
-
-    def print_result(self, items: ItemsContainer):
+    def _print_results(self, items: ItemsContainer):
         if self.mode == "kept":
             for item in items.kept:
                 print(item)
         else:
-            for i in items.discarded:
-                print(i)
+            for item in items.discarded:
+                print(item)
+
+    def collect_items(self, items: list[str]) -> list[Item]:
+        raise NotImplementedError
 
     def run(self):
         try:
@@ -252,6 +284,9 @@ class PyPipelineCLI:
         except Exception as e:
             self.log_error(f"error while parsing arguments: {e}")
             sys.exit(ExitCodes.PARSING_ERROR)
+
+        if self.read_from_stdin:
+            self.items.extend(read_stdin())
 
         if actions is None:
             self.log_error(
@@ -273,9 +308,9 @@ class PyPipelineCLI:
             processed_items = self._process_items(items, actions)
         except Exception as e:
             self.log_error(f"error while processing items: {e}")
-            sys.exit(1)
-        if self.print_res:
-            self.print_result(processed_items)
+            sys.exit(ExitCodes.PARSING_ERROR)
+        if self.print_results:
+            self._print_results(processed_items)
         sys.exit(ExitCodes.SUCCESS)
 
 

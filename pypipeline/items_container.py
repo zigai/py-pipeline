@@ -1,16 +1,16 @@
 import pprint
 
-from pypipeline.pipeline_item import PipelineItem
+from pypipeline.item import Item
 
 
 class ItemsContainer:
-    def __init__(self, items: list[PipelineItem] | None = None) -> None:
-        self.items: list[PipelineItem] = items or []
+    def __init__(self, items: list[Item] | None = None) -> None:
+        self.items: list[Item] = items or []
 
-    def add(self, item: PipelineItem):
+    def add(self, item: Item):
         self.items.append(item)
 
-    def remove(self, item: PipelineItem):
+    def remove(self, item: Item):
         self.items.remove(item)
 
     def __iter__(self):
