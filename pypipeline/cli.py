@@ -72,13 +72,13 @@ class ActionContainer:
 
 class CommandLineActionsManager:
     def __init__(self, actions: list[Action]) -> None:
-        actions_abbrevs = get_taken_abbreviations(*actions or [])
+        actions_abbrevs = get_taken_abbreviations(actions)
         for i in actions_abbrevs:
             if i in RESERVED_FLAGS:
                 raise ValueError(f"action abbrevation can't be any of: {', '.join(RESERVED_FLAGS)}")
 
-        self.taken_flags = [*RESERVED_FLAGS, *get_taken_abbreviations(*actions)]
-        fill_missing_abbreviations(*actions, taken=self.taken_flags)
+        self.taken_flags = [*RESERVED_FLAGS, *get_taken_abbreviations(actions)]
+        fill_missing_abbreviations(actions, taken=self.taken_flags)
         self.cli_action_map: dict[str, ActionContainer] = {}
         self.actions = [ActionContainer(i) for i in actions]
         self.collect_actions()

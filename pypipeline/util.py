@@ -53,7 +53,7 @@ def get_abbreviation(name: str, taken: list[str]) -> str | None:
         return None
 
 
-def get_taken_abbreviations(*actions: Action) -> list[str]:
+def get_taken_abbreviations(actions: list[Action]) -> list[str]:
     taken = []
     for i in actions:
         if i.abbrev is None:
@@ -64,7 +64,7 @@ def get_taken_abbreviations(*actions: Action) -> list[str]:
     return taken
 
 
-def fill_missing_abbreviations(*actions: Action, taken: list[str]):
+def fill_missing_abbreviations(actions: list[Action], taken: list[str]):
     for i in actions:
         if i.abbrev is None:
             i.abbrev = get_abbreviation(snake_case(i.__class__.__name__), taken=taken)
