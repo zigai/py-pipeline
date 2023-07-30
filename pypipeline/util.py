@@ -1,12 +1,13 @@
 import re
 import sys
+from typing import Literal
 
 from stdl.str_u import snake_case
 
 from pypipeline.action import Action
 
 
-def get_pattern_type(pattern: str):
+def get_pattern_type(pattern: str) -> Literal["glob", "regex", None]:
     """Returns whether the pattern is a glob or regex pattern."""
     if "*" in pattern or "?" in pattern:
         return "glob"
@@ -20,6 +21,11 @@ def get_abbreviation(name: str, taken: list[str]) -> str | None:
     """
     Tries to return a short name for a command.
     Returns None if it cannot find a short name.
+
+    Args:
+        name (str): The name of the command.
+        taken (list[str]): A list of taken abbreviations.
+
     Example:
         >>> get_command_short_name("hello_world", [])
         >>> "h"
@@ -54,6 +60,9 @@ def get_abbreviation(name: str, taken: list[str]) -> str | None:
 
 
 def get_taken_abbreviations(actions: list[Action]) -> list[str]:
+    """
+    Returns a list of taken abbreviations for a list of actions.
+    """
     taken = []
     for i in actions:
         if i.abbrev is None:
@@ -64,7 +73,10 @@ def get_taken_abbreviations(actions: list[Action]) -> list[str]:
     return taken
 
 
-def fill_missing_abbreviations(actions: list[Action], taken: list[str]):
+def fill_missing_abbreviations(actions: list[Action], taken: list[str]) -> None:
+    """
+    Fills in missing abbreviations for a list of actions.
+    """
     for i in actions:
         if i.abbrev is None:
             i.abbrev = get_abbreviation(snake_case(i.__class__.__name__), taken=taken)
