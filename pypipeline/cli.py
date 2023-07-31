@@ -89,7 +89,7 @@ class ActionAutoParser:
                 raise ValueError(
                     f"Action '{self.obj_action.name}' does not have an argument '{param_name}'."
                 )
-            param_obj = self.init_obj_container.get_param(param_name)
+            param_obj = self.init_obj_container.get_param(param_name)  # type: ignore
             self.args[param_name] = TYPE_PARSER.parse(param_value, param_obj.type)
             return
 
@@ -107,7 +107,7 @@ class ActionAutoParser:
             pass
         instance = self.init_fn(**self.args)
         if instance.type == "filter":
-            instance.invert = inverted
+            instance.invert = inverted  # type: ignore
         return instance
 
 
@@ -187,7 +187,7 @@ class CommandLineActionsManager:
         ljust = min(ljust, CLI_MAX_LJUST)
         return ljust
 
-    def get_actions_help_section(self) -> str:
+    def cli_help_section(self) -> str:
         help_filters, help_transformers = ["\nfilters:"], ["\nmodifiers:"]
         for i in self.actions:
             h = f"{i.cli_help_flag.ljust(self.ljust)}   {i.description}"
@@ -230,7 +230,7 @@ class PyPipelineCLI:
         self.items = []
 
         self.manager = CommandLineActionsManager(actions)
-        self.help = self._get_help_str()
+        self.help = self.help_string
 
         if run:
             self.run()
@@ -243,25 +243,19 @@ class PyPipelineCLI:
             return
         print(f"[{self.name}] {message}")
 
-    def _remove_prefix(self, flag: str) -> str:
-        if flag.startswith(FLAG_PREFIX_LONG):
-            return flag[len(FLAG_PREFIX_LONG) :]
-        if flag.startswith(FLAG_PREFIX_SHORT):
-            return flag[len(FLAG_PREFIX_SHORT) :]
-        return flag
-
-    def _get_usage_section(self) -> str:
+    def help_usage(self) -> str:
         return f"usage: {self.executable} [--help] [-v] [--mode] MODE [-t] T [actions] [items]"
 
-    def _get_usage_notes_section(self) -> list[str]:
-        return [
+    def help_usage_notes(self) -> str:
+        notes = [
             f"\n\nnotes:",
             "  filters can be inverted by adding a '!' after the flag",
             f"  you can get help for a specific action by running '{self.executable} <action> --help'\n",
         ]
+        return "\n".join(notes)
 
-    def _get_options_help_section(self, ljust: int) -> list[str]:
-        return [
+    def help_arg_options(self, ljust: int) -> str:
+        options = [
             "\noptions:",
             f"  --help".ljust(ljust) + "   show this help message and exit",
             f"  --mode".ljust(ljust) + f"   display kept/discarded items (default: '{self.mode}')",
@@ -269,16 +263,18 @@ class PyPipelineCLI:
             f"  -v, -verbose".ljust(ljust)
             + "   verbose mode (extra log messages and progress bars)",
         ]
+        return "\n".join(options)
 
-    def _get_help_str(self):
+    @property
+    def help_string(self):
         return (
-            self._get_usage_section()
+            self.help_usage()
             + self.description
             + "\n"
-            + "\n".join(self._get_options_help_section(self.manager.ljust))
+            + self.help_arg_options(self.manager.ljust)
             + "\n"
-            + self.manager.get_actions_help_section()
-            + "\n".join(self._get_usage_notes_section())
+            + self.manager.cli_help_section()
+            + self.help_usage_notes()
         )
 
     def parse_args(self) -> list[Action]:
@@ -291,7 +287,7 @@ class PyPipelineCLI:
         actions = []
         i = 0
         while i < len(args):
-            arg = self._remove_prefix(args[i])
+            arg = flag_remove_prefix(args[i])
             if arg in RESERVED_FLAGS:
                 match arg:
                     case "help":
@@ -317,8 +313,6 @@ class PyPipelineCLI:
                         sys.exit(ExitCodes.PARSING_ERROR)
                 continue
             if action := self.manager.get(args[i]):
-                print("ACTION:", action, args[i])
-
                 next_arg = args[i + 1]
                 if next_arg == "--help":
                     print(action.get_help_long())
@@ -337,12 +331,11 @@ class PyPipelineCLI:
                     action_args.append(next_arg)
                     i += 1
                 inverted = arg.endswith(FILTER_INVERT_SUFFIX)
-                parser = ActionAutoParser(action.cls)
+                parser = ActionAutoParser(action.cls)  # type: ignore
                 for argumfdafd in action_args:
                     parser.parse(argumfdafd)
                 obj = parser.get_action(inverted=inverted)
                 actions.append(obj)
-                print("OBJ:", obj)
                 i += 1
                 continue
             if not arg.startswith(FLAG_PREFIX_LONG) and not arg.startswith(FLAG_PREFIX_SHORT):

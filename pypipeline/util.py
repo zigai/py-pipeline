@@ -2,6 +2,7 @@ import re
 import sys
 from typing import Literal
 
+from stdl import fs
 from stdl.str_u import snake_case
 
 from pypipeline.action import Action
@@ -85,4 +86,4 @@ def fill_missing_abbreviations(actions: list[Action], taken: list[str]) -> None:
 def get_executable_name(*, full=False) -> str:
     if full:
         return sys.argv[0]
-    return sys.argv[0].split("/")[-1]
+    return sys.argv[0].split(fs.SEP)[-1]
