@@ -2,7 +2,7 @@ import inspect
 import sys
 from functools import cached_property
 from multiprocessing import cpu_count
-from typing import Any, Dict, Literal, Type
+from typing import Literal, Type
 
 import docstring_parser
 from objinspect import Class, Method
@@ -379,7 +379,6 @@ class PyPipelineCLI:
             actions = self.parse_args()
         except Exception as e:
             self.log_error(f"error while parsing arguments: {e}")
-            raise e
             sys.exit(ExitCodes.PARSING_ERROR)
 
         # if self.read_from_stdin:
@@ -397,7 +396,7 @@ class PyPipelineCLI:
             self.log_error(f"error while collecting items: {e}")
             sys.exit(ExitCodes.INPUT_ERROR)
 
-        if not items:
+        if not items or len(items) == 0:
             self.log_info("no items to process found")
             sys.exit(ExitCodes.INPUT_ERROR)
 
