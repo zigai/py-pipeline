@@ -44,8 +44,8 @@ def test_float_filter():
 
 
 def test_text_pattern_filter():
-    assert TextPatternFilter.parse("*.py").pattern_type == "glob"
-    assert TextPatternFilter.parse(r"[\w]").pattern_type == "regex"
+    assert TextPatternFilter.parse("*.py").t == "glob"
+    assert TextPatternFilter.parse(r"[\w]").t == "regex"
     assert TextPatternFilter.parse("*.py").inner.pattern == "*.py"
     assert TextPatternFilter.parse(r"[\w]").inner.pattern == re.compile(r"[\w]")
     assert TextPatternFilter.parse(r"[\w]").inner.invert == False

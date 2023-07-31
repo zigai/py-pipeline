@@ -1,4 +1,4 @@
-from pypipeline import constants, filter, transformer, util
+from pypipeline import constants, filter, modifier, util
 from pypipeline.action import Action
 from pypipeline.cli import PyPipelineCLI
 from pypipeline.item import Item

@@ -2,13 +2,15 @@ import inspect
 import sys
 from functools import cached_property
 from multiprocessing import cpu_count
-from typing import Literal
+from typing import Any, Dict, Literal, Type
 
 import docstring_parser
+from objinspect import Class, Method
 from stdl.fs import read_stdin
 from stdl.str_u import colored, kebab_case
+from strto import get_parser
 
-from pypipeline.action import Action
+from pypipeline.action import Action, get_actions_dict
 from pypipeline.constants import (
     CLI_HELP_INDENT,
     CLI_MAX_LJUST,
@@ -23,6 +25,90 @@ from pypipeline.item import Item
 from pypipeline.items_container import ItemsContainer
 from pypipeline.pipeline import Pipeline
 from pypipeline.util import fill_missing_abbreviations, get_executable_name, get_taken_abbreviations
+
+TYPE_PARSER = get_parser()
+
+
+def flag_remove_prefix(flag: str) -> str:
+    if flag.startswith(FLAG_PREFIX_LONG):
+        return flag[len(FLAG_PREFIX_LONG) :]
+    if flag.startswith(FLAG_PREFIX_SHORT):
+        return flag[len(FLAG_PREFIX_SHORT) :]
+    return flag
+
+
+class ActionAutoParser:
+    def __init__(self, action: Type[Action]) -> None:
+        self.action = action
+        self.has_custom_parse_fn = action.is_parsable()
+        self.obj_action = Class(action)
+
+        if self.has_custom_parse_fn:
+            self.init_obj_container = Method(self.action.parse, self.action)
+            self.init_args = self.init_obj_container.params
+            self.init_fn = self.action.parse
+        else:
+            self.init_args = self.obj_action.init_args
+            self.init_obj_container = self.obj_action.init_method
+            self.init_fn = self.action
+
+        self.arg_index = 0
+        self.args = {}
+        self.positionals, self.optionals = self.get_expected_num_of_args()
+
+    def positionals_done(self) -> bool:
+        return self.arg_index >= self.positionals
+
+    def get_expected_num_of_args(self) -> tuple[int, int]:
+        if self.init_args is None or len(self.init_args) == 0:
+            return 0, 0
+
+        positionals, optionals = 0, 0
+        for arg in self.init_args:
+            if arg.name == "invert":
+                continue
+            if arg.is_optional:
+                optionals += 1
+            else:
+                positionals += 1
+        return positionals, optionals
+
+    def parse(self, value):
+        if self.init_args is None or len(self.init_args) == 0:
+            raise ValueError(f"Action '{self.obj_action.name}' does not take any arguments.")
+
+        if not self.positionals_done():
+            param = self.init_args[self.arg_index]
+            self.args[param.name] = TYPE_PARSER.parse(value, param.type)
+            self.arg_index += 1
+            return
+
+        if "=" in value:
+            param_name, param_value = value.split("=")
+            if param_name not in self.obj_action._methods:
+                raise ValueError(
+                    f"Action '{self.obj_action.name}' does not have an argument '{param_name}'."
+                )
+            param_obj = self.init_obj_container.get_param(param_name)
+            self.args[param_name] = TYPE_PARSER.parse(param_value, param_obj.type)
+            return
+
+        param = self.init_args[self.arg_index]
+        self.args[param.name] = TYPE_PARSER.parse(value, param.type)
+        self.arg_index += 1
+
+    def parsed_max(self) -> bool:
+        return self.arg_index >= self.positionals + self.optionals
+
+    def get_action(self, inverted=False):
+        try:
+            del self.args["invert"]
+        except:
+            pass
+        instance = self.init_fn(**self.args)
+        if instance.type == "filter":
+            instance.invert = inverted
+        return instance
 
 
 class ActionContainer:
@@ -48,7 +134,7 @@ class ActionContainer:
 
     @cached_property
     def description(self) -> str:
-        doc = self.cls.get_docstr()
+        doc = self.cls.get_docstring()
         if doc is None:
             return ""
         doc = docstring_parser.parse(doc)
@@ -102,12 +188,12 @@ class CommandLineActionsManager:
         return ljust
 
     def get_actions_help_section(self) -> str:
-        help_filters, help_transformers = ["\nfilters:"], ["\ntransformers:"]
+        help_filters, help_transformers = ["\nfilters:"], ["\nmodifiers:"]
         for i in self.actions:
             h = f"{i.cli_help_flag.ljust(self.ljust)}   {i.description}"
             if i.cls.type == "filter":
                 help_filters.append(h)
-            elif i.cls.type == "transformer":
+            elif i.cls.type == "modifier":
                 help_transformers.append(h)
             else:
                 raise ValueError(i.cls.type)
@@ -197,6 +283,7 @@ class PyPipelineCLI:
 
     def parse_args(self) -> list[Action]:
         args = sys.argv[1:]
+        last_index = len(args) - 1
         if not args:
             self.log_error(f"no arguments provided. run '{self.executable} --help' for help")
             sys.exit(ExitCodes.INPUT_ERROR)
@@ -230,17 +317,33 @@ class PyPipelineCLI:
                         sys.exit(ExitCodes.PARSING_ERROR)
                 continue
             if action := self.manager.get(args[i]):
-                inverted = arg.endswith(FILTER_INVERT_SUFFIX)
-                action_cls = action.cls
-                action_args = args[i + 1]
-                if action_args == "--help":
+                print("ACTION:", action, args[i])
+
+                next_arg = args[i + 1]
+                if next_arg == "--help":
                     print(action.get_help_long())
                     sys.exit(ExitCodes.SUCCESS)
-                action_obj = action_cls.parse(
-                    action_args, **{"invert": inverted} if inverted else {}
-                )
-                actions.append(action_obj)
-                i += 2
+
+                action_args = []
+                while True:
+                    next_index = i + 1
+                    if next_index > last_index:  # no more args
+                        break
+
+                    next_arg = args[next_index]
+                    if self.manager.get(next_arg):  # next arg is an action
+                        break
+
+                    action_args.append(next_arg)
+                    i += 1
+                inverted = arg.endswith(FILTER_INVERT_SUFFIX)
+                parser = ActionAutoParser(action.cls)
+                for argumfdafd in action_args:
+                    parser.parse(argumfdafd)
+                obj = parser.get_action(inverted=inverted)
+                actions.append(obj)
+                print("OBJ:", obj)
+                i += 1
                 continue
             if not arg.startswith(FLAG_PREFIX_LONG) and not arg.startswith(FLAG_PREFIX_SHORT):
                 self.items.append(arg)
@@ -283,10 +386,11 @@ class PyPipelineCLI:
             actions = self.parse_args()
         except Exception as e:
             self.log_error(f"error while parsing arguments: {e}")
+            raise e
             sys.exit(ExitCodes.PARSING_ERROR)
 
-        if self.read_from_stdin:
-            self.items.extend(read_stdin())
+        # if self.read_from_stdin:
+        #    self.items.extend(read_stdin())
 
         if actions is None:
             self.log_error(

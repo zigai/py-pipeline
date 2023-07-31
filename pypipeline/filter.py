@@ -1,28 +1,11 @@
 import re
 from fnmatch import fnmatch
+from typing import Literal
 
-from pypipeline.action import Action
+from pypipeline.action import Action, Filter
 from pypipeline.constants import INT_MAX, INT_MIN, SEP
 from pypipeline.item import Item
 from pypipeline.util import get_pattern_type
-
-
-class Filter(Action):
-    type = "filter"
-
-    def __init__(self, invert=False) -> None:
-        self.invert = invert
-        super().__init__()
-
-    def process(self, item: Item) -> bool:
-        return NotImplemented
-
-    def eval(self, item: Item) -> Item:
-        res = self.process(item)
-        if self.invert:
-            res = not res
-        item.discarded = not res
-        return item
 
 
 class IntFilter(Filter):
@@ -95,16 +78,24 @@ class GlobFilter(Filter):
 class TextPatternFilter(Filter):
     """A filter that can be either a glob or regex pattern."""
 
-    def __init__(self, pattern: str, invert=False, pattern_type=None) -> None:
-        if pattern_type is None:
-            pattern_type = get_pattern_type(pattern)
-        if pattern_type is None:
+    dict_exclude = ["t", "invert"]
+
+    def __init__(
+        self,
+        pattern: str,
+        invert=False,
+        t: Literal["regex", "glob", None] = None,
+    ) -> None:
+        if t is None:
+            t = get_pattern_type(pattern)
+        if t is None:
             raise ValueError(f"'{pattern}' is not a valid glob or regex pattern.")
-        if pattern_type == "regex":
+        if t == "regex":
             self.inner = RegexFilter(pattern, invert)
-        elif pattern_type == "glob":
+        elif t == "glob":
             self.inner = GlobFilter(pattern, invert)
-        self.pattern_type = pattern_type
+        self.t = t
+        self.pattern = pattern
         super().__init__(invert)
 
     def process(self, text: str) -> bool:
