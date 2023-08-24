@@ -3,7 +3,7 @@ import sys
 from typing import Literal
 
 from stdl import fs
-from stdl.str_u import snake_case
+from stdl.st import snake_case
 
 from pypipeline.action import Action
 

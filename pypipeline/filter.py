@@ -2,9 +2,8 @@ import re
 from fnmatch import fnmatch
 from typing import Literal
 
-from pypipeline.action import Action, Filter
+from pypipeline.action import Filter
 from pypipeline.constants import INT_MAX, INT_MIN, SEP
-from pypipeline.item import Item
 from pypipeline.util import get_pattern_type
 
 

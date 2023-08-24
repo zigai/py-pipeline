@@ -2,7 +2,7 @@ import inspect
 from typing import Any, Dict, Type
 
 from objinspect import Class
-from stdl.str_u import kebab_case
+from stdl.st import kebab_case
 
 from pypipeline.item import Item
 

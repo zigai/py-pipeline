@@ -7,10 +7,10 @@ from typing import Literal, Type
 import docstring_parser
 from objinspect import Class, Method
 from stdl.fs import read_stdin
-from stdl.str_u import colored, kebab_case
+from stdl.st import colored, kebab_case
 from strto import get_parser
 
-from pypipeline.action import Action, get_actions_dict
+from pypipeline.action import Action
 from pypipeline.constants import (
     CLI_HELP_INDENT,
     CLI_MAX_LJUST,
@@ -89,8 +89,8 @@ class ActionAutoParser:
                 raise ValueError(
                     f"Action '{self.obj_action.name}' does not have an argument '{param_name}'."
                 )
-            param_obj = self.init_obj_container.get_param(param_name)  # type: ignore
-            self.args[param_name] = TYPE_PARSER.parse(param_value, param_obj.type)
+            parameter = self.init_obj_container.get_param(param_name)  # type: ignore
+            self.args[param_name] = TYPE_PARSER.parse(param_value, parameter.type)
             return
 
         param = self.init_args[self.arg_index]
@@ -177,9 +177,8 @@ class CommandLineActionsManager:
             if action.cls.type == "filter":
                 self.cli_action_map[action.flag_long + FILTER_INVERT_SUFFIX] = action
                 if action.flag_short:
-                    self.cli_action_map[
-                        action.flag_short + FILTER_INVERT_SUFFIX  # type:ignore
-                    ] = action
+                    key = action.flag_short + FILTER_INVERT_SUFFIX
+                    self.cli_action_map[key] = action
 
     @cached_property
     def ljust(self) -> int:
