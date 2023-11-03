@@ -43,7 +43,7 @@ class Action:
         return args
 
     def __repr__(self):
-        vars_str = ", ".join([f"{i}={j}" for i, j in vars(self).items()])
+        vars_str = ", ".join([f"{i}={j}" for i, j in self.dict().items()])
         return f"{self.__class__.__name__}({vars_str})"
 
     def __lt__(self, other):
