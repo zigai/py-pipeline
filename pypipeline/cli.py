@@ -6,7 +6,6 @@ from typing import Literal, Type
 
 import docstring_parser
 from objinspect import Class, Method
-from stdl.fs import read_stdin
 from stdl.st import colored, kebab_case
 from strto import get_parser
 
@@ -24,7 +23,11 @@ from pypipeline.constants import (
 from pypipeline.item import Item
 from pypipeline.items_container import ItemsContainer
 from pypipeline.pipeline import Pipeline
-from pypipeline.util import fill_missing_abbreviations, get_executable_name, get_taken_abbreviations
+from pypipeline.util import (
+    fill_missing_abbreviations,
+    get_executable_name,
+    get_taken_abbreviations,
+)
 
 TYPE_PARSER = get_parser()
 
@@ -75,7 +78,9 @@ class ActionAutoParser:
 
     def parse(self, value):
         if self.init_args is None or len(self.init_args) == 0:
-            raise ValueError(f"Action '{self.obj_action.name}' does not take any arguments.")
+            raise ValueError(
+                f"Action '{self.obj_action.name}' does not take any arguments."
+            )
 
         if not self.positionals_done():
             param = self.init_args[self.arg_index]
@@ -161,7 +166,9 @@ class CommandLineActionsManager:
         actions_abbrevs = get_taken_abbreviations(actions)
         for i in actions_abbrevs:
             if i in RESERVED_FLAGS:
-                raise ValueError(f"action abbrevation can't be any of: {', '.join(RESERVED_FLAGS)}")
+                raise ValueError(
+                    f"action abbrevation can't be any of: {', '.join(RESERVED_FLAGS)}"
+                )
 
         self.taken_flags = [*RESERVED_FLAGS, *get_taken_abbreviations(actions)]
         fill_missing_abbreviations(actions, taken=self.taken_flags)
@@ -257,7 +264,8 @@ class PyPipelineCLI:
         options = [
             "\noptions:",
             f"  --help".ljust(ljust) + "   show this help message and exit",
-            f"  --mode".ljust(ljust) + f"   display kept/discarded items (default: '{self.mode}')",
+            f"  --mode".ljust(ljust)
+            + f"   display kept/discarded items (default: '{self.mode}')",
             f"  -t".ljust(ljust) + f"   number of threads to use (default: {self.t})",
             f"  -v, -verbose".ljust(ljust)
             + "   verbose mode (extra log messages and progress bars)",
@@ -280,7 +288,9 @@ class PyPipelineCLI:
         args = sys.argv[1:]
         last_index = len(args) - 1
         if not args:
-            self.log_error(f"no arguments provided. run '{self.executable} --help' for help")
+            self.log_error(
+                f"no arguments provided. run '{self.executable} --help' for help"
+            )
             sys.exit(ExitCodes.INPUT_ERROR)
 
         actions = []
@@ -337,7 +347,9 @@ class PyPipelineCLI:
                 actions.append(obj)
                 i += 1
                 continue
-            if not arg.startswith(FLAG_PREFIX_LONG) and not arg.startswith(FLAG_PREFIX_SHORT):
+            if not arg.startswith(FLAG_PREFIX_LONG) and not arg.startswith(
+                FLAG_PREFIX_SHORT
+            ):
                 self.items.append(arg)
                 i += 1
             else:

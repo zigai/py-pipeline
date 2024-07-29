@@ -9,7 +9,9 @@ from pypipeline.items_container import ItemsContainer
 
 
 class Pipeline:
-    def __init__(self, actions: list[Action] | None = None, on_discrad=True, verbose=False) -> None:
+    def __init__(
+        self, actions: list[Action] | None = None, on_discrad=True, verbose=False
+    ) -> None:
         self.actions: list[Action] = []
         if actions:
             self.actions.extend(actions)
