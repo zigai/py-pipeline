@@ -1,4 +1,4 @@
-stdl>=0.5.4
+stdl>=0.6.1
 tqdm
 docstring_parser>=0.15
-objinspect>=0.2.13
+objinspect>=0.2.15
